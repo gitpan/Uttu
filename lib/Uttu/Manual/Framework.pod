@@ -1,0 +1,105 @@
+=head1 NAME
+
+Uttu::Manual::Framework - Description of frameworks.
+
+=head1 DESCRIPTION
+
+Uttu by itself is insufficient for any reasonably complex site.  It
+does not provide authentication, session management, or page layout.
+
+A framework defines how all the infrastructure -- authentication and
+session handling, for example -- works together.  It provides a code
+context in which function sets (collections of pages,
+configuration modules, etc.) run.
+
+When installing a site using Uttu, you will need all the prerequisites of
+Uttu, primarily Apache, mod_perl, a content handler such as HTML::Mason,
+and AppConfig, as well as a framework.  The framework will determine which
+function sets are available (or the function sets you want to use will
+determine which framework you need).
+
+A framework is a collection of Perl modules, content pages, and other files
+which together provide a coherent environment in which to develop an
+application, usually as a function set (or collection of them for fairly
+complex applications).
+
+Basically, this module handles everything up to the point the request is
+handed over to the content handler.  The framework provides any
+functionality after that point.
+
+A framework should not itself provide any functionality that could be
+viewed as part of an application.  It should limit itself to such general
+tasks as session management, authentication, and authorization.
+
+=head1 WRITING A FRAMEWORK
+
+A framework consists of a Perl module which Uttu uses to configure the
+framework, a collection of function sets that provide basic services such
+as session management or authentication, and miscellanous files, such as a
+root C<autohandler> for HTML::Mason.
+
+=head2 Directory Layout
+
+The installed and distribution directory layouts are different.  Which one
+you use for development is up to you, but it can be easier to work in the
+distribution layout and use symbolic links to map files to an installation
+directory for testing.
+
+A typical mapping of distribution to installation directories:
+
+ l10n -> $uttu_prefix/framework/$framework/lib/Uttu/Framework/L10N/
+ sets -> $uttu_prefix/framework/$framework/sets/
+ lib  -> $uttu_prefix/framework/$framework/lib/
+ support -> $uttu_prefix/framework/$framework/
+
+In addition to these directories, there are also the C<conf> and C<t>
+directories for particular configuration files and tests, respectively.
+
+=head2 Example Framework
+
+As an example, we will create the Simple framework.
+
+ % cd ~/cvs
+ % mkdir uttu-framework-simple
+ % cd uttu-framework-simple
+ % mkdir l10n support sets conf
+
+In this directory, create the file Simple.pm with the following contents.
+
+ package Uttu::Framework::Simple;
+  
+ use Uttu::Framework;
+  
+ use vars qw(@ISA $VERSION);
+  
+ @ISA = qw(Uttu::Framework);
+  
+ $VERSION = '0.01';
+  
+ 1;
+
+This establishes the basic framework with default behaviors.
+
+TODO: describe how everything works
+
+Last, we will create the file Makefile.PL, which is used to install the
+framework.
+
+ package Uttu::Framework::Simple;
+  
+ use Uttu::MakeMaker;
+  
+ WriteMakefile(
+   NAME         => __PACKAGE__,
+   VERSION_FROM => 'Simple.pm',
+   AUTHOR       => 'James Smith <jgsmith@cpan.org>',
+   ABSTRACT_FROM => 'Simple.pm',
+   PREREQ_PM    => {
+                   Uttu => 0.01,
+                   },
+ );
+
+When run, this will create a Makefile that will put everything in the right
+place.
+
+

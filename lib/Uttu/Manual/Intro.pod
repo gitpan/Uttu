@@ -1,0 +1,157 @@
+=head1 NAME
+
+Uttu::Manual::Intro - Introduction to Uttu
+
+=head1 DESCRIPTION
+
+Uttu provides a web-site driver that, together with a suitable framework,
+makes creating an interactive web-site easy and painless.  Uttu provides
+support for internationalization, URI mapping, configuration as well as
+HTML::Mason as one of the content providers.
+
+
+=head1 HISTORY
+
+
+Unlike Venus, Uttu did not spring fully-formed from anyone's head.  The
+design is based on several different applications, mainly
+L<TWIG|http://twig.screwdriver.net/> and, as it took form,
+L<MudOS|http://www.mudos.org/> and the LPC environment.
+
+Initially, it was a simple rewrite of our web-based administrative
+interface from PHP into Perl.  PHP had proven too limiting for us.  We were
+much more experienced in Perl and were making simple mistakes in PHP that
+lead to security holes.  For example, instead of comparing two strings with
+C<==>, we had to move to using C<strcmp> since some of
+our strings began with numbers.  PHP also had poor support for object
+oriented programming, which is making our life much easier in Perl.
+
+We chose HTML::Mason because it offered separation of logic from
+presentation, though not perfectly.  It also gave us components and
+per-component caching.  When we are serving a community of 70,000
+customers, this allows for greater scalability.
+
+After doing some initial coding and seeing where the project was headed, we
+decided to develop a core module that could act as a coordinator, or driver
+(in LPC terminology).  Around this would be built a framework with Mason
+and auxiliary code that would correspond to the mudlib of an LPC-based
+Mud.  Again, this seemed best at the time since it allowed for greater
+flexibility.  Uttu itself does not dictate a look or feel for an
+application.  It just coordinates the various pieces.
+
+Just as a mud has rooms and objects and players, so an Uttu-based site
+would have modules, or sets of functionalities that could be added or
+subtracted as the site designer wished.  These became the function sets
+that can be installed in conjunction with a framework.
+
+=head1 INSTALLATION
+
+=head2 Required Modules
+
+Uttu requires the following modules.  If installing via the CPAN module,
+you will have the option of having these installed automatically for you.
+
+ AppConfig
+ Cache::Cache
+ Module::Require
+ mod_perl
+
+It is suggested that you install L<HTML::Mason|HTML::Mason> as well since the only content
+handler currently available requires HTML::Mason.
+
+If you want internationalization support, you will also need to install
+L<Locale::Maketext|Locale::Maketext>.
+
+=head2 Installing Uttu
+
+Uttu is installed just as any other Perl module.
+
+  % make [UTTU_PREFIX=...]
+  % make install
+
+The optional C<UTTU_PREFIX> option can be used to change the default
+installation directory for frameworks and function sets.  By default, it is
+set to the local installation prefix with C<uttu> appended.  For example,
+if the default prefix is C</usr/local>, then C<UTTU_PREFIX> defaults to
+C</usr/local/uttu>.
+
+There are no tests defined at present, though they are in progress and will
+use the L<Apache::Test|Apache::Test> framework when they are done.  See
+L<the Apache test project|http://httpd.apache.org/test/> for more
+information about Apache::Test.
+
+=head2 Installing a Framework
+
+To get the most use out of Uttu, you will want to install a framework.
+Download one that seems to do what you need (for example, authentication,
+authorization, sessions, ...) or, if the framework is available on CPAN and
+you have already installed Uttu, use the CPAN shell.
+
+If you download and unpack the framework distribution, then you can do the
+following:
+
+ % make
+ % make test  (optional)
+ % make install
+
+This will install the framework in the standard location as determined by
+C<UTTU_PREFIX> when Uttu was installed.
+
+If you are using the CPAN shell, you should be able to install the
+framework by requesting the C<Uttu::Framework::$framework> module be
+installed (and if the framework is actually on CPAN).  Fill in an
+appropriate value for C<$framework>.
+
+To install the uri-to-filename mapping, you will need to create a
+configuration file containing the database parameters.  This is the same
+information that will be needed for the site to access the mapping, so you
+only have to figure this part out once.
+
+ % make install_map CONFIG_FILE=/path/to/uttu.conf
+
+The following is a sample configuration file that could be used for this.
+
+ [global]
+   db_database database=uttu:host=localhost
+   db_username uttu
+   db_password xxxxxxxx
+   db_driver mysql
+
+See L<Uttu::Manual::Framework|Uttu::Manual::Framework> for information on
+writing a framework.
+
+=head2 Installing a Function Set
+
+Installing a function set is not any different than installing Uttu or a
+framework.
+
+The module to install via the CPAN shell is
+C<Uttu::Framework::$framework::$function_set>, filling in appropriate
+values for C<$framework> and C<$function_set>.
+
+If the function set is not available on CPAN or you are installing outside
+the CPAN shell, then you can again use the standard sequence for
+installation:
+
+ % make
+ % make test (optional)
+ % make install
+
+You will need to install the uri-to-filename mapping for each site that is
+using this function set.
+
+ % make install_map CONFIG_FILE=/path/to/uttu.conf
+
+See L<Uttu::Manual::FunctionSet|Uttu::Manual::FunctionSet> for information
+on writing a funtion set.
+
+=head1 AUTHOR
+
+James Smith <jgsmith@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.

@@ -1,0 +1,16 @@
+MANIFEST
+Makefile.PL
+README
+lib/Uttu.pm
+lib/Uttu.pod
+lib/Uttu/Config.pm
+lib/Uttu/Framework.pm
+lib/Uttu/Handler.pod
+lib/Uttu/Handler/mason.pm
+lib/Uttu/L10N.pm
+lib/Uttu/MakeMaker.pm
+lib/Uttu/Manual.pod
+lib/Uttu/Manual/Framework.pod
+lib/Uttu/Manual/FuntionSet.pod
+lib/Uttu/Manual/Intro.pod
+lib/Uttu/Tools.pm

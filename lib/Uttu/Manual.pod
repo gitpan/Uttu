@@ -1,0 +1,89 @@
+=head1 NAME
+
+Uttu::Manual - User Guide and Reference Manual for Uttu
+
+=head1 DESCRIPTION
+
+This is the manual for Uttu.  Uttu is a web application environment.
+
+This manual is designed for both the programmer making use of the
+environment and the programmer needing to extend it by writing frameworks
+or function sets.  Implementation-specific information is available in the
+documentation for each module.  A complete list of modules is provided at
+the end of this document.
+
+The manual is broken down into:
+
+=over 4
+
+=item L<Uttu::Manual::Intro|Uttu::Manual::Intro>
+
+Introduction to Uttu and a discussion of how all the pieces fit together.
+
+=item L<Uttu::Manual::Framework|Uttu::Manual::Framework>
+
+How frameworks work and how to write one.
+
+=item L<Uttu::Manual::FunctionSet|Uttu::Manual::FunctionSet>
+
+How function sets work and how to write one.
+
+=item L<Uttu::Manual::Cookbook|Uttu::Manual::Cookbook>
+
+Recipes for Uttu usage.
+
+=item L<Uttu::Manual::Hacking|Uttu::Manual::Hacking>
+
+Looking at the guts of Uttu.
+
+
+=head1 MODULE LISTING
+
+
+=head2 General Modules
+
+=over 4
+
+=item L<Uttu|Uttu>
+
+=item L<Uttu::Framework|Uttu::Framework>
+
+=item L<Uttu::L10N|Uttu::L10N>
+
+=item L<Uttu::Tools|Uttu::Tools>
+
+=back
+
+
+
+=head2 Installation
+
+
+=over 4
+
+=item L<Uttu::MakeMaker|Uttu::MakeMaker>
+
+=back
+
+
+
+=head2 Content Handlers
+
+
+=over 4
+
+=item L<Uttu::Handler::mason|Uttu::Handler::mason>
+
+=back
+
+
+=head1 AUTHOR
+
+James Smith <jgsmith@cpan.org>
+
+=head1 COPYRIGHT
+
+Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.

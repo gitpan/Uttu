@@ -1,0 +1,39 @@
+                            ---------
+                            Uttu 0.01
+                            ---------
+
+Uttu is a web interface driver that works with a framework and function
+sets to build an application.  Support is provided for building the
+infrastructure for a site -- no demands are made for doing sessions in a
+particular way, or authenticating against a particular database. The actual
+specifics are defined by the framework. This allows you to create your own
+flavor of Uttu, if you desire, without having to muck around in the Uttu
+module. Think of LPC and LPMuds with their driver and mudlib.
+
+To install Uttu, download the distribution, untar, and cd into the
+resulting directory.  There, run the following:
+
+  % perl Makefile.PL [UTTU_PREFIX=...]
+  % make
+  % make test (optional)
+  % make install
+
+No non-trivial tests are provided at the moment.  Eventually, the
+Apache::Test framework will be used to test the module.
+
+The UTTU_PREFIX optional parameter for Makefile.PL configures the default
+installation prefix for frameworks and function sets.  Uttu provides an
+easy way to install these parts of an application.  The default
+installation prefix will be something similar to /usr/local/uttu (depends
+on the Perl configuration).
+
+The author lurks on both the HTML::Mason list and the mod_perl list.  Feel
+free to send questions there.
+
+
+Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
+
+This program is free software; you can redistribute it and/or modify it
+under the same terms as Perl itself.
+
+$Id: README,v 1.1 2002/03/20 17:53:27 jgsmith Exp $

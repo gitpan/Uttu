@@ -1,0 +1,73 @@
+=head1 NAME
+
+Uttu::Manual::FunctionSet - Description of function sets.
+
+=head1 DESCRIPTION
+
+A function set is a collection of content files and Perl modules that
+together provide a functional module for an application, such as e-mail,
+user management, or announcements.  A function set typically is written
+with a particular framework in mind, so it expects authentication and
+session information, for example, to be stored in a particular manner.
+
+A function set has a name, usually a single word.  For example, a set
+providing Unix quota management might be called `unix-quota'.  Through the
+rest of this section, we will consider the name to be `xxx'.
+
+A function set may have any or all of the following parts.  The left hand
+side is the file in the function set distribution.  The right hand side is
+the directory or location to which it is moved (using HTML::Mason as an
+example content handler).
+
+If the function set actually requires configuration, then the name of the
+function set should be a valid Perl module name (i.e., no hyphens (-) or
+other special characters).
+
+ pages/*      -> $uttu_prefix/functionsets/$framework/xxx/*
+ xxx.pm       -> $uttu_prefix/framework/$framework/lib/perl/Uttu/Framework/$framework/xxx.pm
+ l10n/lang.pm -> $uttu_prefix/framework/$framework/lib/perl/Uttu/Framework/$framework/L10N/xxx/lang.pm
+ lib/*        -> $uttu_prefix/framework/$framework/lib/perl/* (optional)
+ sitemap.txt  -> SQL or general configuration file
+
+Function sets may use the L<Uttu::MakeMaker|Uttu::MakeMaker> module in a
+Makefile.PL to provide an installation method that mirrors that of standard
+modules on CPAN.  See L<Uttu::MakeMaker> for more information.
+
+ % perl Makefile.PL PREFIX=<$uttu_prefix> \
+                    ... # other ExtUtils::MakeMaker options
+ % make
+ % make test (?)
+ % make install
+
+=head2 Web Pages
+
+Any web pages provided by the set will usually be run through the content
+handler.  These should be placed under C<$function_set_base/xxx/>.  URI to
+file mappings are provided in a different part of the function set.
+
+=head2 Configuration
+
+The configuration module should be installed as
+C<Uttu::Framework::$global_framework::xxx>.  This module will be loaded
+automatically during server startup and is responsible for defining any
+configuration variables as well as registering components needed by the
+framework.
+
+=head2 URI to Component Mapping
+
+The mapping of URI to component can be done either as an addition to the
+configuration file (not recommended) or as an addition to the SQL tables
+(recommended).  The mapping should be provided as a plain text file with
+one URI to component mapping per line.  The URIs are relative to the
+absolute URI location of this function set.  The component names are
+relative to the component installation directory (usually
+C<$function_set_base/xxx/>).
+
+For example,
+
+  # URI           component
+  index.html      index.html
+  quota/edit.html edit.html
+  queue/view.html view-queue.html
+
+
