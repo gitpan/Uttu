@@ -13,7 +13,7 @@ use warnings;
 
 use vars qw{ $REVISION };
 
-$REVISION = sprintf("%d.%d", q$Id: template.pm,v 1.2 2002/04/15 22:27:05 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: template.pm,v 1.4 2002/07/29 03:08:46 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 ###
 ### [template] config variables
@@ -210,6 +210,35 @@ sub handle_request {
   close FH;
 
   return OK;
+}
+
+sub shandle_request {
+  my($self, $u, $r) = @_;
+
+  my $ttconfig = $self -> ttconfig;
+
+  return \q<> unless $ttconfig;
+
+  # we need to deal with pathinfo for dhandler-like operation
+  my $params = {
+    u => $u,
+    r => $r,
+  };
+
+  $params -> {lh} = $u -> lh
+    if $u -> config -> global_internationalization;
+
+  my $to = Template -> new(%$ttconfig);
+
+  local(*FH);
+  open FH, "<" . $r -> filename or return \q<>;
+
+  my $content;
+  $to -> process(\*FH, $params, \$content);
+
+  close FH;
+
+  return \$content;
 }
 
 sub fail {
@@ -551,7 +580,7 @@ L<Template>.
 
 James G. Smith <jsmith@cpan.org>
 
-The descriptions of the Mason configuration variables are based on the
+The descriptions of the Template configuration variables are based on the
 Template documentation.
 
 =head1 COPYRIGHT

@@ -30,9 +30,11 @@ configuration module is not required.
 
 =item ./xxx.pm  ./xxx/
 
-If a directory is in the top level source directory and either a module exists in the top level directory with the same name,
-or such a module exists within the directory, then that directory is considered a function set.  The module is used to
-configure the function set.
+If a directory is in the top level source directory and either a 
+module exists in the top level directory with the same name, or 
+such a module exists within the directory, then that directory is 
+considered a function set.  The module is used to configure the 
+function set.
 
 For example, the following is a valid function set:
 

@@ -90,7 +90,9 @@ This establishes the basic framework with default behaviors.
 TODO: describe how everything works
 
 Last, we will create the file Makefile.PL, which is used to install the
-framework.
+framework.  We are in the process of supporting L<Module::Build|Module::Build> 
+instead of L<ExtUtils::MakeMaker|ExtUtils::MakeMaker> since the 
+former is much easier to customize.
 
  use Uttu::MakeMaker;
   

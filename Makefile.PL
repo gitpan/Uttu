@@ -1,6 +1,6 @@
 package Uttu;
 
-#$Id: Makefile.PL,v 1.5 2002/04/15 22:26:48 jgsmith Exp $
+#$Id: Makefile.PL,v 1.6 2002/07/28 06:04:31 jgsmith Exp $
 
 use ExtUtils::MakeMaker;
 
@@ -14,6 +14,7 @@ eval {
 my %content_handlers = (
   HTML::Mason => 1.04,
   Template => 2.00,
+  AxKit => 1.6,
 );
 
 my @available_chs = ( );

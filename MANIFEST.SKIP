@@ -1,0 +1,8 @@
+blib
+Config.pm
+CVS
+Uttu.bs
+Uttu.c
+Uttu.o
+Uttu.xs
+.*.tar.gz

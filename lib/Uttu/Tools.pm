@@ -6,7 +6,7 @@ use File::Spec;
 
 use vars qw: @EXPORT_OK @ISA $REVISION :;
 
-$REVISION = sprintf("%d.%d", q$Id: Tools.pm,v 1.5 2002/04/15 22:27:01 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: Tools.pm,v 1.6 2002/07/29 02:56:10 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 @ISA = qw: Exporter :;
 
@@ -49,6 +49,9 @@ sub define_db {
 
     return (
         $prefix."_database", {
+            ARGCOUNT => ARGCOUNT_ONE,
+        },
+        $prefix."_host", {
             ARGCOUNT => ARGCOUNT_LIST,
         },
         $prefix."_username", {
@@ -66,6 +69,9 @@ sub define_db {
         },
     
         $prefix."_const_database", {
+            ARGCOUNT => ARGCOUNT_ONE,
+        },
+        $prefix."_const_host", {
             ARGCOUNT => ARGCOUNT_LIST,
         },
         $prefix."_const_username", {

@@ -1,5 +1,5 @@
                             ---------
-                            Uttu 0.02
+                            Uttu 0.03
                             ---------
 
 Uttu is a web interface driver that works with a framework and function
@@ -26,8 +26,8 @@ easy way to install these parts of an application.  The default
 installation prefix will be something similar to /usr/local/uttu (depends
 on the Perl configuration).
 
-The author lurks on both the HTML::Mason list and the mod_perl list.  Feel
-free to send questions there.
+The author lurks on both the HTML::Mason list and the mod_perl list as 
+well as various IRC channels.  Feel free to send questions there.
 
 
 Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
@@ -35,4 +35,4 @@ Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-$Id: README,v 1.2 2002/04/15 22:26:49 jgsmith Exp $
+$Id: README,v 1.3 2002/07/29 02:23:26 jgsmith Exp $

@@ -16,13 +16,9 @@ package Uttu;
 # comments in this file assume you have read the documentation (Uttu.pod)
 #
 
-use lib qw: /usr/local/apache/perl/module-require/lib :;
-
-BEGIN {
-  # for server restarts...  can't figure out how else to keep the package in Perl
-  # let's experiment a bit, and hope we get better Apache::Status behavior
-  delete @INC{grep m{Uttu/}, keys %INC};
-}
+#BEGIN {
+#  delete @INC{grep m{Uttu/}, keys %INC};
+#}
 
 use AppConfig                   qw- :argcount :expand -;
 use Apache::Constants           qw- :common DECLINE_CMD -;
@@ -38,11 +34,17 @@ use Uttu::Config;
 use strict;
 use warnings;
 
-use vars qw: $VERSION $REVISION %variables %configs @ISA :;
+require 5.006;
 
-$VERSION = "0.02";
+use Data::Dumper;
 
-$REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.9 2002/04/15 22:26:52 jgsmith Exp $ =~ m{(\d+).(\d+)});
+use vars qw: %variables %configs :;
+
+our $VERSION = "0.03";
+
+{ no warnings;
+our $REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.10 2002/07/29 02:44:41 jgsmith Exp $ =~ m{(\d+).(\d+)});
+}
 
 my $self_for_config;
 my $config_for_define;
@@ -53,8 +55,10 @@ BEGIN {
   if($ENV{MOD_PERL}) {
     no strict;
 
-    require Apache;
-    require Apache::ModuleConfig;
+    eval {
+        require Apache;
+        require Apache::ModuleConfig;
+    };
 
     eval { require mod_perl; };
     if ($mod_perl::VERSION >= 1.99) {
@@ -67,8 +71,14 @@ BEGIN {
 }
 
 if($ENV{MOD_PERL}) {
-  local(@ISA) = (@ISA, qw(DynaLoader));
-  __PACKAGE__ -> bootstrap($VERSION);
+  if($mod_perl::VERSION < 1.99) {
+    our @ISA = qw(DynaLoader);
+    __PACKAGE__ -> bootstrap($VERSION);
+  } else {
+    # register with Apache::Hook :)
+    Apache::Hook -> add(PerlTransHandler => \&handler);
+    # we still need to register the commands...
+  }
 }
 
 require DBI;
@@ -82,32 +92,38 @@ sub retrieve {
 
     my $r;
     my $self;
-    if($r = Apache -> request) {
-        $self = Apache::ModuleConfig -> get($r, $class);
-        unless($self) { # try and look it up in %configs
-            my $sconfig = Apache::ModuleConfig->get($r -> server, __PACKAGE__);
-            my $server = $r -> get_server_name;
-            my $port   = $r -> get_server_port;
-            my $cs = $configs{"$server:$port"};
-            if(defined $cs) {
-                my $uri = $r -> uri;
-                my $luri = length($uri);
-                my @roots = sort { length($a) <=> length($b) } grep { length($_) <= $luri && $uri =~ m{^$_} } keys %$cs;
-                return unless @roots;
-                # if an Alias(Match)? or SetHandler config is between the root and the uri, we need to return undef
-                my @a = grep {$roots[0] =~ /^$_/} (@{$sconfig -> {_alias}},
-                                                   @{$sconfig -> {_aliasmatch}},
-                                                   @{$sconfig -> {_sethandler}});
-                return if grep {length($_) <= $luri && $uri =~ /^$_/} @a; #(@a, @as, @sh);
-                $self = $cs->{$roots[0]} if @roots;
-
+    eval {
+        if($r = Apache -> request) {
+            $self = Apache::ModuleConfig -> get($r, $class);
+            unless($self) { # try and look it up in %configs
+                my $sconfig = Apache::ModuleConfig->get($r -> server, __PACKAGE__);
+                my $server = $r -> get_server_name;
+                my $port   = $r -> get_server_port;
+                my $cs = $configs{"$server:$port"};
+                if(defined $cs) {
+                    my $uri = $r -> uri;
+                    my $luri = length($uri);
+                    my @roots = sort { length($a) <=> length($b) } grep { length($_) <= $luri && $uri =~ m{^$_} } keys %$cs;
+                    return unless @roots;
+                    # if an Alias(Match)? or SetHandler config is between the root and the uri, we need to return undef
+                    my @a = grep {$roots[0] =~ /^$_/} (@{$sconfig -> {_alias}},
+                                                       @{$sconfig -> {_aliasmatch}},
+                                                       @{$sconfig -> {_sethandler}});
+                    return if grep {length($_) <= $luri && $uri =~ /^$_/} @a; #(@a, @as, @sh);
+                    $self = $cs->{$roots[0]} if @roots;
+    
+                }
             }
         }
-    } elsif($self_for_config) {
-        $self = $self_for_config;
-    } elsif($self_global) {
-        $self = $self_global;
-    }   
+    };
+
+    if($@ || !$r) {
+        if($self_for_config) {
+            $self = $self_for_config;
+        } elsif($self_global) {
+            $self = $self_global;
+        }   
+    }
     return $self;
 }
 
@@ -137,10 +153,9 @@ sub define {
 sub _set_from_file {
     my($self, $variable, $value) = @_;
     my $file = server_root_relative($value);
-    local(*FH);
-    open FH, "< $file" or warn "Unable to read $file\n";
-    my $p = <FH>;
-    close FH;
+    open my $fh, "<", $file or warn "Unable to read $file\n";
+    my $p = <$fh>;
+    close $fh;
     return unless defined $p;
     chomp($p);
     $variable =~ s{_file$}{};
@@ -534,6 +549,7 @@ sub uri_to_comp {
       }
     }
   };
+
   return ( $function, $path_info );
 }
 
@@ -673,7 +689,7 @@ sub _query_const_dbh_var {
 
   $ret = $c -> $psv if $suffix && $c -> $psv;
 
-  if($var eq '_database' && !@{$ret || []} ||
+  if($var eq '_host' && !@{$ret || []} ||
      $var eq '_option' && !keys %{$ret || {}} ||
      !$ret) {
     $ret = $c -> $pv;
@@ -686,7 +702,7 @@ sub query_dbh {
   my($self, $prefix, %options) = @_;
 
   # eventually, we want to support round-robin support for multiple
-  # database definitions (not username/password or driver, just database)
+  # database definitions (not username/password or driver, just host/port)
 
   my $suffix = "";
   my $use_db_global_as_default = 1;
@@ -699,6 +715,8 @@ sub query_dbh {
                 ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_driver", $suffix) : undef )),
       database => ($self->_query_const_dbh_var($prefix, "_database", $suffix) ||
                 ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_database", $suffix) : undef )),
+      host     => ($self->_query_const_dbh_var($prefix, "_host", $suffix) ||
+                ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_host", $suffix) : undef )),
       username => ($self->_query_const_dbh_var($prefix, "_username", $suffix) ||
                 ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_username", $suffix) : undef )),
       password => ($self->_query_const_dbh_var($prefix, "_password", $suffix) ||
@@ -707,9 +725,9 @@ sub query_dbh {
                 ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_option", $suffix) : undef )),
     };
     $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {options} -> {PrintError} ||= 0;
-    $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {database} = 
-      [ $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {database} ]
-        unless UNIVERSAL::isa($self -> {_dbh_cache}->{"$prefix:$suffix"} -> {database}, 'ARRAY');
+    $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {host} = 
+      [ $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {host} ]
+        unless UNIVERSAL::isa($self -> {_dbh_cache}->{"$prefix:$suffix"} -> {host}, 'ARRAY');
   }
 
 
@@ -718,26 +736,28 @@ sub query_dbh {
     return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
   } if $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
 
+
   my $info = $self -> {_dbh_cache}->{"$prefix:$suffix"};
-  my $current = $info -> {database} -> [0];
+  my $current = $info -> {host} -> [0];
   my $dbh = DBIx::Abstract -> connect({
-      dsn => "dbi:" . $info->{driver} . ":$current", 
+      dsn => join(":", "dbi", $info->{driver}, "database=" . $info->{database}, "host=".$current),
       user => $info->{username}, 
       password => $info->{password},
     },
     { useCached => 1,
       loglevel => 6,
       logfile => "/tmp/uttu_sql_log",
-      %{$info -> {options} || {}
-    } }
+      %{$info -> {options} || {}} 
+    }
   );
   return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
 
-  my $db = pop @{$info->{database}};
-  unshift @{$info->{database}}, $db;
-  while($db ne $current) {
+  unshift @{$info->{host}}, $current;
+  my $host = pop @{$info->{host}};
+  unshift @{$info->{host}}, $host;
+  while($host ne $current) {
     $dbh = DBIx::Abstract -> connect({
-        dsn => "dbi:" . $info->{driver} . ":$db", 
+        dsn => join(":", "dbi", $info->{driver}, "database=" .$info->{database}, "host=$host"),
         user => $info->{username}, 
         password => $info->{password},
       },
@@ -747,7 +767,7 @@ sub query_dbh {
     );
     
     return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
-    unshift @{$info->{database}}, ($db = pop @{$info->{database}});
+    unshift @{$info->{host}}, ($host = pop @{$info->{host}});
   }
   return;
 }
@@ -809,6 +829,8 @@ sub handler ($$) {
     }
   }
 
+  return DECLINED unless $self;
+
   my $c = $self -> config;
 
   my $loc = $self -> {location};
@@ -832,18 +854,19 @@ sub handler ($$) {
     return DECLINED unless $function;
 
     $filename = $self -> lookup_function($function);
+    return DECLINED unless $function;
     $filename .= "/$path_info" if $path_info;
-    $filename =~ s{//+}{/}g;
+    $filename =~ s{//+}{/}g if $filename;
     $path_info = "";
   } else {
     $uri =~ s{^$loc}{};
     $function = $uri;
-    $self -> note("function") = $function;
+    $self -> note("function", $function);
     $filename = $r -> filename;
     $path_info = $r -> path_info;
   }
 
-  my $ext;
+  my $ext = '';
   if($self -> {global_handle} || $self -> {global_translate_uri}) {
     $ext = $1 if $uri =~ m{(\..*?)$};
     return DECLINED unless exists $self -> {global_handle} -> {$ext} || 
@@ -853,21 +876,22 @@ sub handler ($$) {
   }
 
   # send on its way
-  $r -> filename($filename);
-  $r -> path_info($path_info);
-  $r -> uri($loc . $uri);
+  if(defined $filename) {
+      $r -> filename($filename);
+      $r -> path_info($path_info);
+      $r -> uri($loc . $uri);
+  }
 
   if(exists $self -> {global_handle} -> {$ext}) {
     $r -> handler("perl-script");
     $r -> push_handlers(PerlHandler => \&content_handler);
   }
-  return OK;
+  return OK if $filename;
+  return DECLINED;
 }
 
 sub content_handler ($$) {
   my($self, $r) = (__PACKAGE__ -> retrieve, Apache->request);
-
-  #$self = $self -> new unless ref $self;
 
   # then run the component
   my $ret = SERVER_ERROR;
@@ -896,6 +920,7 @@ sub content_handler ($$) {
   }
 
   eval {
+    #local(@INC) = @INC;
     push @INC, @{$c -> global_lib || []};
     push @INC, "$Uttu::Config::PREFIX/framework/".$c->global_framework."/lib" if $c->global_framework;
 
@@ -1006,9 +1031,15 @@ sub config {
 
   #warn Data::Dumper -> Dump([$c]) . "\n";
 
-  my $handler_class = "Uttu::Handler::" . $c -> global_content_handler;
+  if($c -> global_content_handler) {
+      my $handler_class = "Uttu::Handler::" . $c -> global_content_handler;
 
-  $self -> {handler} = $handler_class -> config($c, $param);
+      $self_for_config = $self;
+      $self -> {handler} = $handler_class -> config($c, $param);
+      $self_for_config = undef;
+  } else {
+      warn "No content handler specified.\n";
+  }
 
   if($c -> global_internationalization) {
     eval {

@@ -1,13 +1,18 @@
 Changes
 MANIFEST
+MANIFEST.SKIP
 Makefile.PL
 README
 lib/Uttu.pm
 lib/Uttu.pod
+lib/Uttu/Build.pm
 lib/Uttu/Changes.pod
 lib/Uttu/Config.pod
 lib/Uttu/Framework.pm
 lib/Uttu/Handler.pod
+lib/Uttu/Handler/axkit.pm
+lib/Uttu/Handler/axkit/ConfigReader.pm
+lib/Uttu/Handler/axkit/ContentProvider.pm
 lib/Uttu/Handler/mason.pm
 lib/Uttu/Handler/template.pm
 lib/Uttu/L10N.pm
@@ -16,4 +21,5 @@ lib/Uttu/Manual.pod
 lib/Uttu/Manual/Framework.pod
 lib/Uttu/Manual/FunctionSet.pod
 lib/Uttu/Manual/Intro.pod
+lib/Uttu/Test.pm
 lib/Uttu/Tools.pm

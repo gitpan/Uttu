@@ -5,16 +5,16 @@ package Uttu::Handler::mason;
 #
 
 use Apache::Constants qw: SERVER_ERROR :;
-use AppConfig qw- :argcount -;
+use AppConfig qw- :argcount EXPAND_NONE -;
 use Data::Dumper;
 use HTML::Mason;
-use HTML::Mason::ApacheHandler args_method => 'mod_perl';
+use HTML::Mason::ApacheHandler;
 use strict;
 use warnings;
 
 use vars qw{ $REVISION };
 
-$REVISION = sprintf("%d.%d", q$Id: mason.pm,v 1.4 2002/04/15 22:27:04 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: mason.pm,v 1.7 2002/07/29 03:51:23 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 
 ###
@@ -72,6 +72,7 @@ sub init {
   Uttu -> define(
     mason_allow_global => {
         ARGCOUNT => ARGCOUNT_LIST,
+        EXPAND => EXPAND_NONE,
     },
     mason_auto_send_headers => {
         ARGCOUNT => ARGCOUNT_NONE,
@@ -100,6 +101,9 @@ sub init {
     },
     mason_dhandler_name => {
         DEFAULT => 'dhandler',
+    },
+    mason_error_format => {
+        DEFAULT => 'html',
     },
     mason_ignore_warnings_expr => {
         ARGCOUNT => ARGCOUNT_NONE,
@@ -190,6 +194,35 @@ sub handle_request {
   $self -> ah -> handle_request($r);
 }
 
+sub shandle_request {
+    my($self, $u, $r) = @_;
+
+    return '' unless $self -> ah;
+
+    $self -> ah -> interp -> set_global(u => $u);
+    $self -> ah -> interp -> set_global(lh => $u -> lh)
+        if $u -> config -> global_internationalization;
+
+    my $req = $self -> ah -> prepare_request($r);
+
+    throw Apache::AxKit::Exception::IO(
+        -text => $req
+    ) unless ref($req);
+
+    my $content;
+
+    $req -> out_method(\$content);
+    $req -> auto_send_headers(0);
+
+    my $ret = $req->exec;
+
+    return \$content;
+
+#      my $mh = new HTML::Mason::ApacheHandler(
+#        auto_send_headers => 0
+#    );
+}
+
 ###
 ### Configuration support routines
 ###
@@ -225,8 +258,8 @@ sub config {
       $loc =~ s{ }{_}g;
 
       my $h = $hostname;
-      $h =~ s{\.}{_}g;
-      my $p = join("::", "Uttu::Sites", $h, "Port_" . ($s -> port || 80) );
+      $h =~ s{\.}{_}g if $h;
+      my $p = join("::", "Uttu::Sites", ($h || "localhost"), "Port_" . ($s -> port || 80) );
       $p .= $loc unless $loc eq '::';
       $p =~ s{::$}{};
     
@@ -248,7 +281,7 @@ sub config {
   }
 
 
-  $c -> mason_status_title("Uttu - " . $hostname . ":" 
+  $c -> mason_status_title("Uttu - " . ($hostname || 'localhost') . ":" 
                                     . ($c -> global_port || $s -> port || 80)
                                     . $param->path())
       unless !$ENV{MOD_PERL} || $c -> mason_status_title;
@@ -301,15 +334,8 @@ sub config {
       code_cache_max_size => $c -> mason_code_cache_max_size,
       dhandler_name       => $c -> mason_dhandler_name,
       max_recurse         => $c -> mason_max_recurse,
-      out_mode            => $c -> mason_out_mode,
       preloads            => $c -> mason_preload || [],
-      system_log_events   => join("|", @{$c -> mason_system_log_event || []}),
-      system_log_separator => $c -> mason_system_log_separator,
-      use_autohandlers    => 1,
-      use_data_cache      => $c -> mason_use_data_cache,
-      use_dhandlers       => 1,
       use_object_files    => $c -> mason_use_object_files,
-      use_reload_file     => $c -> mason_use_reload_file,
     );
 
     $interp_options{data_dir}         = $c -> mason_data_dir if $c -> mason_data_dir;
@@ -321,11 +347,20 @@ sub config {
     my %handler_options = (
       auto_send_headers   => $c -> mason_auto_send_headers,
       decline_dirs        => $c -> mason_decline_dirs,
+      error_format        => $c -> mason_error_format,
     );
 
 
     $handler_options{apache_status_title} = $c->mason_status_title if $c->mason_status_title;
       
+    my %parser_options = (
+        allow_globals        => [ @{$c -> mason_allow_global}, qw($r $u) ],
+        ignore_warnings_expr => $c -> mason_ignore_warnings_expr,
+        in_package           => $c -> mason_in_package,
+        use_strict           => $c -> mason_use_strict,
+        postamble            => join(" ", @{$c -> mason_postamble || []}),
+        preamble             => join(" ", @{$c -> mason_preamble  || []}),
+    );
 
     # configure apache handler
     my $ah;
@@ -333,29 +368,25 @@ sub config {
       $ah = new HTML::Mason::ApacheHandler(
         %handler_options,
         %interp_options,
-        parser                   => new HTML::Mason::Parser (
-            allow_globals        => [ @{$c -> mason_allow_global}, qw($r $u) ],
-            ignore_warnings_expr => $c -> mason_ignore_warnings_expr,
-            in_package           => $c -> mason_in_package,
-            taint_check          => $c -> mason_taint_check,
-            use_strict           => $c -> mason_use_strict,
-            postamble            => join(" ", @{$c -> mason_postamble || []}),
-            preamble             => join(" ", @{$c -> mason_preamble  || []}),
-        )
+        #parser                   => new HTML::Mason::Parser (
+            %parser_options,
+        #)
       );
     } else {
       $ah = new HTML::Mason::ApacheHandler(
         %handler_options,
         interp              => new HTML::Mason::Interp ( 
             %interp_options,
+            use_autohandlers    => 1,
+            use_data_cache      => $c -> mason_use_data_cache,
+            use_dhandlers       => 1,
+            out_mode            => $c -> mason_out_mode,
+            system_log_events   => join("|", @{$c -> mason_system_log_event || []}),
+            system_log_separator => $c -> mason_system_log_separator,
+            use_reload_file     => $c -> mason_use_reload_file,
             parser                   => new HTML::Mason::Parser (
-                allow_globals        => [ @{$c -> mason_allow_global}, qw($r $u) ],
-                ignore_warnings_expr => $c -> mason_ignore_warnings_expr,
-                in_package           => $c -> mason_in_package,
+                %parser_options,
                 taint_check          => $c -> mason_taint_check,
-                use_strict           => $c -> mason_use_strict,
-                postamble            => join(" ", @{$c -> mason_postamble || []}),
-                preamble             => join(" ", @{$c -> mason_preamble  || []}),
             )
         )
       );
@@ -555,6 +586,12 @@ This will map C</cm/(.*)> to C<my-cm/$1> where the dhandler is
 C<my-cm/dhandler> (using the default dhandler name) if the uri is one that
 is normally translated and handled by the content handler (the extension on
 the uri must be one mentioned in a C<handle> configuration line).
+
+=item error_format
+
+This default is <html>.  This may be used to specify a different 
+output format.  The function C<HTML::Mason::Exception::as_$error_format> 
+is called and should return the formatted error report.
 
 =item ignore_warnings_expr
 

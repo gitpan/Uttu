@@ -106,13 +106,13 @@ C<mason> is included with the standard Uttu distribution and creates an
 C<HTML::Mason::ApacheHandler> object to handle pages. See L<Uttu::Handler>
 for what a content handler should provide.
 
-Uttu comes with support for HTML::Mason (C<mason>) and the Template Toolkit
-(C<template>).  See the documentation for
+Uttu comes with support for AxKit (C<axkit>), HTML::Mason (C<mason>),
+and the Template Toolkit (C<template>).  See the documentation for
 C<Uttu::Handler::$global_content_handler> for configuration information.
 
 =item db_database, db_const_database
 
-This is a string denoting the database, hostname, etc., hosting the
+This is a string denoting the database, etc., hosting the
 database used especially by the uri-to-filename mapping.  This is also the
 default database other modules may use.
 
@@ -139,6 +139,18 @@ The default is C<undef>ined.
 
 C<db_const_driver> may be used to define the driver used for read-only
 access.
+
+=item db_host, db_const_host
+
+This is the host where the database is located.
+
+If multiple C<db_host> lines are present, Uttu will cycle through them
+until it exhausts all available hostnames, or it finds one that
+allows a connection.  This allows failover to alternate hosts.
+
+C<db_host> should allow modifications as well as read-only access.
+Uttu itself only neads read access.  C<db_const_host> implies that the
+database will not be modified.
 
 =item db_password, db_const_password
 
@@ -266,7 +278,7 @@ to C<@INC> for each request.
 
 =item map_uri
 
-This is a mapping or URIs to filenames that overrides the database.  This
+This is a mapping of URIs to filenames that overrides the database.  This
 is also useful if the database is not setup yet, but the base modules are
 installed.  See the documentation for the base module set for the
 configuration information to map URIs to filenames so documentation can be
@@ -550,11 +562,19 @@ and following the suggested C<@ISA> chain,
 =head2 Handling Apache Restarts
 
 This isn't so much a bug as a situation with an ugly workaround.
-Currently, Uttu will delete all Uttu:: modules from %INC when loaded.
-Otherwise, certain Uttu:: modules will not be loaded into the symbol tables
+Before 0.03, Uttu would delete all Uttu:: modules from %INC when loaded.
+Otherwise, certain Uttu:: modules would not be loaded into the symbol tables
 by Perl during an Apache restart.
 
-So, Uttu can handle an Apache restart, it just isn't graceful about doing so.
+This appears to not be a problem on FreeBSD 4.6 using Perl 5.6.1 and 
+mod_perl 1.27.  So the munging of %INC has been removed.  If you 
+experience problems, let me know (or better yet, send a patch that 
+fixes them).
+
+So, Uttu can handle an Apache restart, it just isn't always 
+graceful about doing so.
+
+This may be related to the next bug.
 
 =head2 Apache::Status, Symbol Tables, and Solaris
 
@@ -567,6 +587,13 @@ results in a core dump if this module is loaded.
 mod_negotiation doesn't get to see the directory in which the component or
 file resides until after Uttu has done the uri-to-filename conversion.
 
+=head2 Database connections disappear
+
+For some reason, if a website is left idle for a long time (on the 
+order of days), the uri-to-filename mapping code will be unable to 
+read the database (it seems). This will result in pages not being 
+found on the server.  The fix for now is to stop and restart the 
+web server.
 
 =head1 SEE ALSO
 
@@ -593,4 +620,4 @@ Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
-$Id: Uttu.pod,v 1.7 2002/04/15 22:26:53 jgsmith Exp $
+$Id: Uttu.pod,v 1.8 2002/07/29 02:55:21 jgsmith Exp $

@@ -74,6 +74,8 @@ Looking at the guts of Uttu.
 
 =over 4
 
+=item L<Uttu::Handler::axkit|Uttu::Handler::axkit>
+
 =item L<Uttu::Handler::mason|Uttu::Handler::mason>
 
 =item L<Uttu::Handler::template|Uttu::Handler::template>
@@ -83,7 +85,7 @@ Looking at the guts of Uttu.
 
 =head1 AUTHOR
 
-James Smith <jgsmith@cpan.org>
+James Smith <jsmith@cpan.org>
 
 =head1 COPYRIGHT
 

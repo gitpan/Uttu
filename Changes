@@ -6,6 +6,30 @@ DESCRIPTION
     This list should not be considered exhaustive. Major bug fixes and API
     changes should be here.
 
+VERSION 0.03
+  New Features
+
+    AxKit
+        Added support for AxKit as a content handler (see the
+        Uttu::Handler::axkit manpage). AxKit allows using any of the other
+        content handlers as XML sources.
+
+  Bug Fixes
+
+    Uttu is more robust
+        Put in several checks for certain conditions that could cause an
+        error. We try to avoid them now.
+
+  Modified Behavior
+
+    Database Connections
+        We now use multiple host specifications instead of multiple database
+        specifications to allow failover.
+
+    Secondary Content Provision
+        The Template and Mason handlers have been modified to work as XML
+        sources for AxKit.
+
 VERSION 0.02
   New Features
 
@@ -68,7 +92,7 @@ VERSION 0.01
     This is the initial release of Uttu.
 
 AUTHOR
-    James Smith <jgsmith@cpan.org>
+    James Smith <jsmith@cpan.org>
 
 COPYRIGHT
     Copyright (C) 2002 Texas A&M University. All Rights Reserved.
