@@ -20,6 +20,7 @@ lib/Uttu/Manual/Framework.pod
 lib/Uttu/Manual/FunctionSet.pod
 lib/Uttu/Manual/Intro.pod
 lib/Uttu/Resource.pm
+lib/Uttu/Resource/dbi.pm
 lib/Uttu/Resource/ldap.pm
 lib/Uttu/Resource/pool.pm
 lib/Uttu/Resource/resources.pm
@@ -35,8 +36,11 @@ t/TEST.PL
 t/conf/extra.conf.in
 t/conf/modperl_startup.pl
 t/conf/uttu.axkit.in
+t/conf/uttu.axkit.xml.in
 t/conf/uttu.mason.in
+t/conf/uttu.mason.xml.in
 t/conf/uttu.tt2.in
+t/conf/uttu.tt2.xml.in
 t/db/axkit/functions
 t/db/mason/functions
 t/db/tt2/functions

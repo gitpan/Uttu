@@ -1,40 +1,25 @@
-package Uttu::Resource::ldap;
+package Uttu::Resource::dbi;
 
-use ResourcePool::Factory::Net::LDAP;
+use ResourcePool::Factory::DBI;
 use ResourcePool;
+
+our %non_dbi_option = map { $_ => 1 } qw(weight suspendtimeout max maxtry sleeponfail);
 
 sub parse {
     my($class, $prefix, $xp, $node) = @_;
 
-    my %new_options;
-    my %bind_options;
+    my %options;
+    my %attr;
     my $t;
 
     foreach my $o (qw(
-        port
-        timeout
-        debug
-        async
-        onerror
-        version
-    )) {
-        next unless '' ne ($t = $xp -> findvalue('@'.lc $o, $node));
-        $new_options{$o} = "".$t;
-    }
-
-    foreach my $o (qw(
+        datasource
+        username
         password
     )) {
         next unless '' ne ($t = $xp -> findvalue('@'.lc $o, $node));
-        $bind_options{$o} = "".$t;
+        $options{$o} = "".$t;
     }
-
-    my $host = "".$xp -> findvalue('@host', $node);
-
-    my $inst = ResourcePool::Factory::Net::LDAP->new($host, %new_options);
-
-    my $dn = "".$xp -> findvalue('@dn', $node);
-    $inst -> bind($dn, %bind_options);
 
     my %lb_options;
     $lb_options{Weight} = "".$xp -> findvalue('@weight', $node);
@@ -49,6 +34,16 @@ sub parse {
         $rp_options{$o} = "".$t;
     }
 
+    # need all other attributes for %attr
+    my $attributes = $xp -> findnodes('@*', $node);
+    foreach my $a ($attributes -> get_nodelist) {
+        my $ln = $a -> getLocalName;
+        next if exists($options{$ln}) || $non_dbi_option{$ln};
+        $attr{$a -> getLocalName} = "".$a -> getNodeValue;
+    }
+
+    my $inst = ResourcePool::Factory::DBI->new(@options{qw(datasource username password)}, \%attr);
+
     $inst = ResourcePool -> new($inst, %rp_options);
 
     if(wantarray) {
@@ -57,7 +52,6 @@ sub parse {
     else {
         return $inst;
     }
-
 }
 
 1;

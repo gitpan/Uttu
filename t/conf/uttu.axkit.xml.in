@@ -1,0 +1,7 @@
+<resources id="axkit.test">
+  <pool id="dbi.uttu">
+    <dbi datasource="dbi:CSV:f_dir=@ServerRoot@/db/axkit"
+         PrintError="1"
+    />
+  </pool>
+</resources>

@@ -64,6 +64,28 @@ return UNIVERSAL::isa($ldap, 'ResourcePool::LoadBalancer');
 
 }
 
+eval { require Uttu::Resource::dbi; };
+
+warn "$@\n" if $@;
+
+unless($@) {
+    push @tests, q{
+<resources id="test">
+  <pool id="dbi">
+    <dbi />
+  </pool>
+</resources>
+};
+
+    push @tests, sub {
+my $u = bless { } => 'Uttu';
+Uttu::Resource -> parse($u, \'<resources id="test"><pool id="dbi"><dbi/></pool></resources>');
+my $dbi = $u -> resource('dbi');
+return UNIVERSAL::isa($dbi, 'ResourcePool::LoadBalancer');
+};
+
+}
+
 
 plan tests => scalar(@tests);
 

@@ -1,7 +1,5 @@
 [global]
-db_driver CSV
-db_database f_dir=@ServerRoot@/db/axkit
-db_option PrintError = 1
+resources @ServerRoot@/conf/uttu.axkit.xml
 
 uri_map_namespace axkit
 

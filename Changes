@@ -6,6 +6,25 @@ DESCRIPTION
     This list should not be considered exhaustive. Major bug fixes and API
     changes should be here.
 
+VERSION 0.06
+  Bug Fixes
+
+    Host availability functions removed
+        Since we are now using ResourcePool, much of the fail-over code in
+        Uttu has been removed. ResourcePool handles fail-over as well as
+        other means of using multiple servers for a resource.
+
+    Database definition functions
+        All the database definition functions are removed or deprecated.
+        ResourcePool now manages database configurations based on an XML
+        configuration file loaded with the "global_resources" Uttu
+        configuration option.
+
+    ResourcePool configuration fixed
+        The Uttu modules used to configure ResourcePool objects was using
+        XML::XPath incorrectly (not stringifying strings). It now is.
+        Configurations should work.
+
 VERSION 0.05
   New Features
 

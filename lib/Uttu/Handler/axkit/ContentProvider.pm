@@ -10,11 +10,16 @@ sub init {
 
     # these three are empty when requesting the content associated 
     # with Apache->request->filename
-    warn "$self : $p{file}; $p{uri}; $p{key}\n";
+    #warn "$self : $p{file}; $p{uri}; $p{key}\n";
+    #warn "caller: ", join(", ", caller), "\n";
+    #warn "is main: ", Apache -> request -> is_main, "\n";
+    #warn "is initial req: ", Apache -> request -> is_initial_req, "\n";
+    #warn "prev: ", Apache -> request -> prev, "\n";
+
     unless($p{file} || $p{uri} || $p{key}) {
         my $c = $self -> get_strref;  # also loads content into cache
 
-        if($c) {
+        if(defined $c) {
             my $ret = $self -> SUPER::init(%p);
             $self -> {is_dir} = 0;
             $self -> {file_exists} = 1;
@@ -45,9 +50,12 @@ sub get_fh {
 sub get_strref {
     my $self = shift;
 
+    #warn "$self -> get_strref\n";
+    #warn "caller: ", join(", ", caller), "\n";
     return $self -> {_content} if defined $self -> {_content};
+    #warn $self -> {_content}, " not defined\n";
 
-    my $u = Uttu -> retrieve or return \q<>;
+    my $u = Uttu -> retrieve or return;
 
     eval {
         local($SIG{__DIE__});
@@ -60,7 +68,7 @@ sub get_strref {
     };
     warn "$@\n" if $@;
 
-    return $$self{_content};
+    return $self -> {_content};
 }
 
 1;

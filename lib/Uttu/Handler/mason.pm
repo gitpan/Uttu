@@ -14,7 +14,7 @@ use warnings;
 
 use vars qw{ $REVISION };
 
-$REVISION = sprintf("%d.%d", q$Id: mason.pm,v 1.7 2002/07/29 03:51:23 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: mason.pm,v 1.8 2003/04/16 19:44:36 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 
 ###
@@ -166,22 +166,48 @@ sub init {
 }
 
 sub file_to_path {
-  my($self, $prefix, $path) = @_;
+  my($self, $prefix, $orig_path, $path_info) = @_;
 
-  return $self ->{_lookup_cache} -> {$path}
-      if $self ->{_lookup_cache} -> {$path};
+  my $path = $orig_path;
+  $path = "/$path" unless $path =~ m{^/};
 
-  my $roots = $self->ah->interp->comp_root;
-  if(UNIVERSAL::isa($roots, "ARRAY")) {
-      foreach my $r (@{$roots}) {
-          my $f = $r->[1] ."/". ($r->[0] eq 'function_sets' ? "" : $prefix . "/") . $path;
-          return $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
-      }
-  } else {
-      return $self ->{_lookup_cache} -> {$path} = 
-             $roots ."/". $prefix . "/" . $path 
-          if -f ($roots ."/". $prefix . "/" . $path) or -d _;
+  my @paths = ($path);
+  while($path) {
+       $path =~ s{/.*?$}{};
+       push @paths, $path;
   }
+
+  my $function;
+  my $roots = $self->ah->interp->comp_root;
+
+  while(!$function && ($path = shift @paths)) {
+      last if $function = $self ->{_lookup_cache} -> {$path};
+
+      if(UNIVERSAL::isa($roots, "ARRAY")) {
+          foreach my $r (@{$roots}) {
+              my $f = $r->[1] ."/". ($r->[0] eq 'function_sets' ? "" : $prefix . "/") . $path;
+              $function = $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
+          }
+      } else {
+          $function = $self ->{_lookup_cache} -> {$path} = 
+                 $roots ."/". $prefix . "/" . $path 
+              if -f ($roots ."/". $prefix . "/" . $path) or -d _;
+      }
+  }
+
+  #warn "Original path: $orig_path; $path_info\n";
+  my $npath = $orig_path;
+  $npath = "/$npath" unless $npath =~ m{^/};
+  $npath =~ s{^\Q$path\E}{};
+  $path_info = '' unless defined $path_info;
+  $path_info = "/$npath/$path_info" if defined $npath;
+  $path_info =~ s{/+}{/} if defined $path_info;
+  #warn "New path: $path; $path_info\n";
+
+  $function .= "dhandler" if $function =~ m{/^};
+
+  return ($function, $path_info);
+  
 }
 
 sub handle_request {

@@ -17,7 +17,17 @@ sub parse {
         }
     }
     else {
-        $xp = XML::XPath -> new(filename => $file);
+        open my $fh, "<", $file or die "Unable to open $file\n";
+        my $xml;
+        my $l;
+        while(!$xml && ($l = <$fh>)) {
+            next if $l =~ m{^#};
+            $xml = $l;
+        }
+        local($/);
+        $xml .= <$fh>;
+        close $fh;
+        $xp = XML::XPath -> new(xml => $xml);
     }
     my $resources = $xp -> find('/resources');
 

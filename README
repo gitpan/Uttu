@@ -1,5 +1,5 @@
                             ---------
-                            Uttu 0.05
+                            Uttu 0.06
                             ---------
 
 Uttu is a web interface driver that works with a framework and 
@@ -49,4 +49,4 @@ Copyright (C) 2002-2003  Texas A&M University.  All Rights Reserved.
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-$Id: README,v 1.5 2003/03/12 06:33:48 jgsmith Exp $
+$Id: README,v 1.6 2003/04/16 19:49:56 jgsmith Exp $

@@ -110,73 +110,6 @@ Uttu comes with support for AxKit (C<axkit>), HTML::Mason (C<mason>),
 and the Template Toolkit (C<template>).  See the documentation for
 C<Uttu::Handler::$global_content_handler> for configuration information.
 
-=item db_database, db_const_database
-
-This is a string denoting the database, etc., hosting the
-database used especially by the uri-to-filename mapping.  This is also the
-default database other modules may use.
-
-The C<$dsn> string used in the C<DBI-E<gt>connect> call is constructed from this.
-
- $dsn = "dbi:$global_dbi_driver:$global_db_database"
-
-The default is none.
-
-C<db_database> should allow modifications as well as read-only access.
-Uttu itself only neads read access.  C<db_const_database> implies that the
-database will not be modified.
-
-=item db_driver, db_const_driver
-
-This is the DBI driver to use.  C<DBD::$global_db_driver> (and
-C<DBD::$global_db_const_driver>) must be loadable.
-
-The default is C<undef>ined.
-
-C<db_const_driver> may be used to define the driver used for read-only
-access.
-
-=item db_host, db_const_host
-
-This is the host where the database is located.
-
-If multiple C<db_host> lines are present, Uttu will cycle through them
-until it exhausts all available hostnames, or it finds one that
-allows a connection.  This allows failover to alternate hosts.
-
-C<db_host> should allow modifications as well as read-only access.
-Uttu itself only neads read access.  C<db_const_host> implies that the
-database will not be modified.
-
-=item db_password, db_const_password
-
-This is a single string which is the password to use when connecting to the
-database.
-
-The default is C<undef>ined.
-
-C<db_const_password> is the password to use for read-only access.
-
-=item db_password_file, db_const_password_file
-
-This is the name of a file, relative to the server root if not an absolute
-path, which contains the password on its first line.  The first line is
-read in, C<chomp>'d, and then used to set C<db_password> above.  This is
-useful if you want to keep the password out of the configuration file.
-
-The default is C<undef>ined.
-
-C<db_const_password_file> may be used to define C<db_const_password>.
-
-=item db_username, db_const_username
-
-This is a single string which is the username to use when connecting to the
-database.
-
-The default is C<undef>ined.
-
-C<db_const_username> defines the username for read-only access.
-
 =item db_uri_map_table
 
 This is the table in which the uri-to-filename mapping resides.
@@ -439,94 +372,15 @@ It will return C<undef> if it can not create the cache.
 
 =item query_dbh
 
-  $dbh = $u -> query_dbh($config_prefix, %options);
+  $dbh = $u -> query_dbh($config_prefix);
 
-This will return a database handle (result of a C<DBIx::Abstract-E<gt>connect> call)
-for the connection configured in the configuration file.
-
-The call C<$u -E<gt> query_dbh("global_db")>, for example will first look for the following configuration items.
-
-  [global]
-    db_const_driver    (string)
-    db_const_database  (list)
-    db_const_username  (string)
-    db_const_password  (string)
-    db_const_option    (hash)
-
-For those of these that it can't find, it will look for the following.
-
-  [global]
-    db_driver    (string)
-    db_database  (list)
-    db_username  (string)
-    db_password  (string)
-    db_option    (hash)
-
-This function expects the C<*_database_*> variable to be a list of suitable
-strings.  If the string last used to make a connection does not return a
-valid database handle, then it will go through the rest of the list in
-order until either it returns to the most recently used C<database>
-configuration or establishes a successful connection.
+This will return a database handle previously configured in the C<resources> configuration file.
 
 It will return C<undef> if it can not establish a connection.
 
-This function leaves caching of database connections to L<Apache::DBI|Apache::DBI>.
+This function leaves caching of database connections to L<ResourcePool|ResourcePool>.
 
-The following options are available:
-
-=over 4
-
-=item NoDefault
-
-If this option is true, then the "global_db_*" configuration settings are
-not used if the equivalent settings for the requested database coniguration
-cannot be found.
-
-=item Write
-
-If this option is true, then the C<_const> part of the prefix will not be
-considered.  This is useful for specifying a database for reading and
-another for writing, with round robin access to either as desired.
-
-=back
-
-=item query_dbh_info
-
-This method takes the same arguments as C<query_dbh> and returns 
-a reference to a hash containing the paramters used to connect to
-the database.  The hash has the following keys.
-
-=over 4
-
-=item driver
-
-=item database
-
-=item host
-
-This is an array reference to one or more hostnames.  The first 
-hostname in the array is the current (or most recent) host being used.
-
-=item username
-
-=item password
-
-=item options
-
-This is a reference to a hash of DBI options.
-
-=back 4
-
-=item query_host_available
-
-Returns a true value if the availability of the host is being 
-tracked and the host is marked as available, or if the host is not 
-being tracked.  If the host is tracked and marked unavailable, 
-returns false.
-
- if($u -> query_host_available('localhost')) {
-    # connect to localhost
- }
+The database handle will be freed at the end of the current Apache request handling phase.
 
 =item query_components
 
@@ -567,28 +421,6 @@ the end of the current request.
 
 This method will return the L<ResourcePool::LoadBalancer|ResourcePool::LoadBalancer> 
 object managing the specified resource.
-
-=item set_host_available
-
-Marks the host as available.  If the optional second argument is 
-given, it will set or unset the availability of the host.
-
- $u -> set_host_available('localhost');
-
-or
-
- $u -> set_host_available('localhost', 1);
-
-=item set_host_unavailable
-
-Marks the host as unavailable.  If the optional second argument 
-is given, it will set or unset the unavailability of the host.
-
- $u -> set_host_unavailable('localhost');
-
-or
-
- $u -> set_host_unavailable('localhost', 1);
 
 =item uri_to_comp
 
@@ -668,18 +500,6 @@ results in a core dump if this module is loaded.
 mod_negotiation doesn't get to see the directory in which the component or
 file resides until after Uttu has done the uri-to-filename conversion.
 
-=head2 Database connections disappear
-
-For some reason, if a website is left idle for a long time (on the 
-order of days), the uri-to-filename mapping code will be unable to 
-read the database (it seems). This will result in pages not being 
-found on the server.  The fix for now is to stop and restart the 
-web server.  This may be fixed already.  It has not shown up for a 
-while in sites run by the author.
-
-We may move to using ResourcePool to manage DBI connections, in 
-part to fix this.
-
 =head2 Apache must start in /
 
 Apache must be started while in the root (/) directory.  Otherwise, 
@@ -693,6 +513,7 @@ thoroughly tested.
 L<AppConfig>,
 L<DBIx::Abstract>,
 L<Locale::Maketext>,
+L<ResourcePool>,
 L<Uttu::Manual>,
 L<Uttu.TAMU.Edu website|http://uttu.tamu.edu/>.
 
@@ -713,4 +534,4 @@ Copyright (C) 2002-2003 Texas A&M University.  All Rights Reserved.
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
-$Id: Uttu.pod,v 1.13 2003/03/12 06:33:48 jgsmith Exp $
+$Id: Uttu.pod,v 1.14 2003/04/16 19:43:22 jgsmith Exp $

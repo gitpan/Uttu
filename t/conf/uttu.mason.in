@@ -1,7 +1,5 @@
 [global]
-db_driver CSV
-db_database f_dir=@ServerRoot@/db/mason
-db_option PrintError = 1
+resources @ServerRoot@/conf/uttu.mason.xml
 
 uri_map_namespace mason
 

@@ -1,0 +1,7 @@
+<resources id="mason.test">
+  <pool id="dbi.uttu">
+    <dbi datasource="dbi:CSV:f_dir=@ServerRoot@/db/mason"
+         PrintError="1"
+    />
+  </pool>
+</resources>

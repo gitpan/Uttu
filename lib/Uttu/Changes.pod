@@ -8,6 +8,34 @@ This document lists the changes to Uttu introduced with each release.  This
 list should not be considered exhaustive.  Major bug fixes and API changes
 should be here.
 
+=head1 VERSION 0.06
+
+=head2 Bug Fixes
+
+=over 4
+
+=item Host availability functions removed
+
+Since we are now using L<ResourcePool|ResourcePool>, much of the 
+fail-over code in Uttu has been removed.
+L<ResourcePool|ResourcePool> handles fail-over as well as other means 
+of using multiple servers for a resource.
+
+=item Database definition functions
+
+All the database definition functions are removed or deprecated.
+L<ResourcePool|ResourcePool> now manages database configurations based 
+on an XML configuration file loaded with the C<global_resources> Uttu 
+configuration option.
+
+=item ResourcePool configuration fixed
+
+The Uttu modules used to configure L<ResourcePool|ResourcePool> objects 
+was using L<XML::XPath|XML::XPath> incorrectly (not stringifying strings).  
+It now is.  Configurations should work.
+
+=back 4
+
 =head1 VERSION 0.05
 
 =head2 New Features

@@ -16,7 +16,7 @@ use warnings;
 
 use vars qw{ $REVISION };
 
-$REVISION = sprintf("%d.%d", q$Id: axkit.pm,v 1.7 2003/03/12 06:33:48 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: axkit.pm,v 1.8 2003/04/16 19:44:33 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 ###
 ### [axkit] config variables
@@ -164,11 +164,13 @@ sub init {
 }
 
 sub file_to_path {
-  my($self, $prefix, $path) = @_;
+  my($self, $prefix, $path, $path_info) = @_;
 
   my $secondary = $self -> secondary_handler;
 
-  return $secondary -> file_to_path($prefix, $path) if $secondary;
+  return $secondary -> file_to_path($prefix, $path, $path_info) if $secondary;
+
+  # TODO: need to support $path_info here....
 
   return $self ->{_lookup_cache} -> {$path}
       if $self ->{_lookup_cache} -> {$path};

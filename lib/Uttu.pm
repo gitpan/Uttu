@@ -29,7 +29,7 @@ use DynaLoader                  ();
 use File::Glob                  qw: bsd_glob :;
 use File::Spec                  ();
 use File::Spec::Unix            ();
-use Uttu::Tools qw: define_cache define_db server_root_relative :;
+use Uttu::Tools qw: define_cache server_root_relative :;
 use Uttu::Config;
 use strict;
 use warnings;
@@ -40,10 +40,10 @@ require 5.006;
 
 use vars qw: %variables %configs :;
 
-our $VERSION = "0.05";
+our $VERSION = "0.06";
 
 { no warnings;
-our $REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.16 2003/03/12 06:30:54 jgsmith Exp $ =~ m{(\d+).(\d+)});
+our $REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.17 2003/04/16 19:43:21 jgsmith Exp $ =~ m{(\d+).(\d+)});
 }
 
 my $self_for_config;
@@ -65,8 +65,9 @@ BEGIN {
       warn "Uttu has not been tested with mod_perl 2.0 (or beta versions thereof)\n";
     }     
 
-    require Apache::DBI;
-    Apache::DBI -> import();
+    # following might mess up ResourcePool stuff
+    #require Apache::DBI;
+    #Apache::DBI -> import();
   }
 }
 
@@ -277,7 +278,7 @@ sub _set_include_depth {
     
 
 Uttu -> define(
-    define_db("global_db"),
+    #define_db("global_db"),  # db now coming from (xml) resource file
     define_cache("global_uri_map"),
     global_db_uri_map_field_uri => {
         DEFAULT => 'uri',
@@ -530,6 +531,7 @@ sub _uri_to_comp {
     unless($ret = $c -> global_map_uri  -> {$uri}) {
       if($dbh and not $ret) {
         # look for it in the sitemap
+        #warn "Where: ", Data::Dumper -> Dump([$where]), "\n";
         eval {
           my @info = $dbh -> select_one_to_array({
             fields => [ $c -> global_db_uri_map_field_file ],
@@ -541,6 +543,7 @@ sub _uri_to_comp {
             $ret = $info[0] if @info;
           }
         };
+        #warn "$@\n" if $@;
       }
     }
     $cache->set($key, $ret || "");
@@ -555,7 +558,8 @@ sub uri_to_comp {
   my $dbh;
 
   eval {
-    $dbh = $self -> query_dbh("global_db");
+    $dbh = $self -> query_dbh("dbi.uttu.read");
+    #warn "dbh: $dbh\n";
     $function = $self -> _uri_to_comp($c, $dbh, $uri);
     unless($function) {
       my @bits = split("/", $uri);
@@ -636,7 +640,7 @@ sub comp_to_uri {
     $key = $comp;
   }
 
-  my $dbh = $self -> query_dbh("global_db")
+  my $dbh = $self -> query_dbh("dbi.uttu.read")
     or carp qq:Unable to connect to database:;
 
 
@@ -703,133 +707,25 @@ sub note {
   }
 }
 
-sub _query_const_dbh_var {
-  my($self, $prefix, $var, $suffix) = @_;
-
-  my $ret;
-  my $c = $self -> config;
-  my $psv = "$prefix$suffix$var";
-  my $pv = "$prefix$var";
-
-  $ret = $c -> $psv if $suffix && $c -> $psv;
-
-  if($var eq '_host' && !@{$ret || []} ||
-     $var eq '_option' && !keys %{$ret || {}} ||
-     !$ret) {
-    $ret = $c -> $pv;
-  }
-
-  return $ret;
-}
-
 sub query_dbh_info {
     my($self, $prefix, %options) = @_;
 
-    my $suffix = "";
-    my $use_db_global_as_default = 1;
-    $suffix = "_const" unless $options{'Write'};
-    $use_db_global_as_default = 0 if $options{'NoDefault'};
-  
-    unless($self -> {_dbh_cache}->{"$prefix:$suffix"}) {
-        $self -> {_dbh_cache}->{"$prefix:$suffix"} = {
-            driver => ($self->_query_const_dbh_var($prefix, "_driver", $suffix) ||
-                      ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_driver", $suffix) : undef )),
-            database => ($self->_query_const_dbh_var($prefix, "_database", $suffix) ||
-                        ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_database", $suffix) : undef )),
-            host     => ($self->_query_const_dbh_var($prefix, "_host", $suffix) ||
-                        ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_host", $suffix) : undef )),
-            username => ($self->_query_const_dbh_var($prefix, "_username", $suffix) ||
-                        ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_username", $suffix) : undef )),
-            password => ($self->_query_const_dbh_var($prefix, "_password", $suffix) ||
-                        ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_password", $suffix) : undef )),
-            options  => ($self->_query_const_dbh_var($prefix, "_option", $suffix) ||
-                        ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_option", $suffix) : undef )),
-        };
-        $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {options} -> {PrintError} ||= 0;
-        $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {host} =
-              [ $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {host} ]
-                  unless UNIVERSAL::isa($self -> {_dbh_cache}->{"$prefix:$suffix"} -> {host}, 'ARRAY');
-    } 
+    warn "Utti::query_dbh_info called from: ", join(", ", caller), "\n";
 
-    return $self -> {_dbh_cache}->{"$prefix:$suffix"};
+    return;
 }
 
+# this gives us a DBIx::Abstract interface to the dbh from the resource file
+# also caches the dbh object for release at end of the request phase
 sub query_dbh {
   my($self, $prefix, %options) = @_;
 
-  # eventually, we want to support round-robin support for multiple
-  # database definitions (not username/password or driver, just host/port)
-  my $suffix = "";
-  $suffix = "_const" unless $options{'Write'};
+  #warn "Utti::query_dbh($prefix) called from: ", join(", ", caller), "\n";
 
-  my $info = $self -> query_dbh_info($prefix, %options);
+  my $dbh = $self -> query_resource($prefix);
 
-  my $current = $info -> {host} -> [0];
-  my $dbh;
-  if(!exists($self -> {_host_info} -> {$current}) || $self -> {_host_info}->{$current}->{available}) {
-      $dbh = eval {
-        $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} -> ensure_connection();
-        return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
-      } if $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
-      return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
-
-      $dbh = DBIx::Abstract -> connect({
-          dsn => join(":", "dbi", $info->{driver}, 
-              ($info->{database} =~ /=/ ? "" : "database=") . $info->{database}, (defined($current) ? "host=".$current : ())),
-          user => $info->{username}, 
-          password => $info->{password},
-        },
-        { #useCached => 1,
-          loglevel => 6,
-          logfile => "/tmp/uttu_sql_log",
-          %{$info -> {options} || {}} 
-        }
-      );
-  }
-  return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
-
-  unshift @{$info->{host}}, $current;
-  my $host = pop @{$info->{host}};
-  unshift @{$info->{host}}, $host;
-  while($host ne $current) {
-    next unless !exists($self -> {_host_info} -> {$host}) || $self -> {_host_info}->{$host}->{available};
-
-    $dbh = DBIx::Abstract -> connect({
-        dsn => join(":", "dbi", $info->{driver}, "database=" .$info->{database}, "host=$host"),
-        user => $info->{username}, 
-        password => $info->{password},
-      },
-      { useCached => 1,
-        %{$info -> {options} || {}
-      } }
-    );
-    
-    return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
-    unshift @{$info->{host}}, ($host = pop @{$info->{host}});
-  }
-  return;
-}
-
-sub query_host_available {
-    my($self, $host) = @_;
-
-    return !exists($self -> {_host_info}->{$host}) || $self -> {_host_info}->{$host}->{available};
-}
-
-sub set_host_available {
-    my($self, $host, $avail) = @_;
-
-    $avail = 1 unless defined $avail;
-
-    $self -> {_host_info}->{$host}->{available} = !!$avail;
-}
-
-sub set_host_unavailable {
-    my($self, $host, $unavail) = @_;
-
-    $unavail = 1 unless defined $unavail;
-
-    $self -> {_host_info}->{$host}->{available} = !$unavail;
+  return unless $dbh;
+  return DBIx::Abstract -> connect({dbh => $dbh});
 }
 
 sub query_cache {
@@ -853,7 +749,7 @@ sub query_cache {
 }
 
 sub resource {
-    my($self, $name) = @_;
+    my($self, $oname) = @_;
 
     # we want to start with $name and back-up through the periods 
     # until we find something
@@ -861,15 +757,87 @@ sub resource {
     # config is to be used for reading and writing.
     # returns undef if nothing can be found
 
+    my $name = $oname;
+
+    # we cache the load balancer - not the individual connections
+    return $self -> {_resource_cache} -> {$name} if defined $self -> {_resource_cache} -> {$name};
+
+    my @names;
+    my $pool;
+    #warn "$self -> resource($oname)\n";
+
     while($name) {
+        push @names, $name;
         foreach my $p (@{$self -> {resource_ids}||[]}) {
-            return ResourcePool::LoadBalancer -> new("${p}.${name}")
-                if ResourcePool::LoadBalancer -> is_created("${p}.${name}");
+            if(ResourcePool::LoadBalancer -> is_created("${p}.${name}")) {
+                #@{$self -> {_resource_cache}}{@names} = $pool = ResourcePool::LoadBalancer -> new("${p}.${name}");
+                $self -> {_resource_cache} -> {$oname} = $pool = ResourcePool::LoadBalancer -> new("${p}.${name}");
+                if(wantarray) {
+                    #warn "Considered ", join(", ", @names), "\n";
+                    #warn "Returning $pool, $name\n";
+                    return($pool, $name);
+                }
+                else {
+                    #warn "Considered ", join(", ", @names), "\n";
+                    #warn "Returning $pool\n";
+                    return $pool;
+                }
+            }
         }
         last unless $name =~ /\./;
-        $name =~ s{\..*?$}{};
+        $name =~ s{\.[^\.]*$}{};
     }
     return;
+}
+
+sub query_resource {
+  my($self, $prefix) = @_;
+
+  return $self -> {used_resources} -> {$prefix} if defined $self -> {used_resources} -> {$prefix};
+
+  my($pool, $name) = ($self -> resource($prefix));
+  #warn "pool -> $pool;  name -> $name\n";
+  return unless $pool;
+  my $ob = $pool -> get;
+  $self -> {used_resources} -> {$prefix} = $ob;
+
+  return unless $ob;  # error - unable to get object from pool - should be errors in error logs from ResourcePool
+
+  return $ob;
+}
+
+sub free_resources {
+    my($self) = @_;
+
+    #
+    # some of the commented out code is for testing/development
+    #   ignore it for now
+    #
+
+    foreach my $prefix (keys %{$self -> {used_resources} || {}}) {
+        next unless defined $prefix;
+        my($pool, $name) = ($self -> resource($prefix));
+        #warn "pool -> $pool;  name -> $name\n";
+        #warn "Apache::Server::Starting -> $Apache::Server::Starting\nApache::Server::ReStarting -> $Apache::Server::ReStarting\n";
+        if($Apache::Server::Starting || $Apache::Server::ReStarting) { # don't allow reuse of the handle ?
+            if(defined $self -> {used_resources} -> {$prefix}) {
+                #eval {
+                #    #$self -> {used_resources} -> {$prefix} -> postfork();
+                #};
+                $pool -> free($self -> {used_resources} -> {$prefix});
+            }
+        }
+        else {
+            $pool -> free($self -> {used_resources} -> {$prefix}) if defined $self -> {used_resources} -> {$prefix};
+        }
+        #while(defined($name) && $prefix ne $name) {
+        #    $self -> {used_resources} -> {$prefix} = undef;
+        #    $prefix =~ s{\.[^\.]*$}{};
+        #}
+        #$self -> {used_resources} -> {$name} = undef if defined $name;
+    }
+
+    $self -> {used_resources} = { };
 }
 
 ###
@@ -881,9 +849,9 @@ sub clear_notes {
 }
 
 sub lookup_function {
-  my($self, $path) = @_;
+  my($self, $path, $path_info) = @_;
 
-  return $self -> {handler} -> file_to_path($self -> config -> global_function_set_base, $path);
+  return $self -> {handler} -> file_to_path($self -> config -> global_function_set_base, $path, $path_info);
 }
 
 ###
@@ -897,6 +865,8 @@ sub handler ($$) {
     $r = $class;
     $class = __PACKAGE__;
   }
+
+  #warn "$class -> handler($r)\n";
 
   return DECLINED unless $class -> isa(__PACKAGE__);
 
@@ -941,10 +911,16 @@ sub handler ($$) {
 
     $self -> note("function", $function);
 
-    return DECLINED unless $function;
+    unless($function) {
+      $self -> free_resources;
+      return DECLINED;
+    }
 
-    $filename = $self -> lookup_function($function);
-    return DECLINED unless $function;
+    ($filename, $path_info) = $self -> lookup_function($function, $path_info);
+    unless($filename) {
+      $self -> free_resources;
+      return DECLINED;
+    }
     #$filename .= "/$path_info" if $path_info;
     #$filename =~ s{//+}{/}g if $filename;
     #$path_info = "";
@@ -956,6 +932,7 @@ sub handler ($$) {
     $path_info = $r -> path_info;
   }
 
+  $self -> free_resources;
   my $ext = '';
   if($self -> {global_handle} || $self -> {global_translate_uri}) {
     $ext = $1 if $uri =~ m{(\..*?)$};
@@ -981,12 +958,15 @@ sub handler ($$) {
     $r -> push_handlers(PerlHandler => \&content_handler);
   }
 
+  #warn "Returning from Uttu::handler\n";
   return OK if defined $filename;
+  #warn "Returning DECLINED from Uttu::handler\n";
   return DECLINED;
 }
 
 sub content_handler ($$) {
   my($self, $r) = (__PACKAGE__ -> retrieve, Apache->request);
+  #warn "$self -> content_handler($r)\n";
 
   # then run the component
   my $ret = SERVER_ERROR;
@@ -1022,6 +1002,7 @@ sub content_handler ($$) {
     $ret = $self -> {handler} -> handle_request($self, $r);
   };
   $self -> clear_notes;
+  $self -> free_resources;
   delete $self -> {_query_dbh_cache};
   delete $self -> {lh};
   if($ret == SERVER_ERROR && $@) {
@@ -1149,6 +1130,7 @@ sub config {
       $self_for_config = undef;
   } else {
       warn "No content handler specified.\n";
+      #warn Data::Dumper -> Dump([$self]);
   }
 
   if($c -> global_internationalization) {
@@ -1166,8 +1148,10 @@ sub config {
 
   eval {
       my $framework = $c -> global_framework;
-      "Uttu::Framework::$framework" -> finish_init($self) if defined $framework;
+      "Uttu::Framework::$framework" -> finish_config($self) if defined $framework;
   };
+
+  $self -> free_resources;
 
   return $self;
 }

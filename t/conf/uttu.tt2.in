@@ -1,7 +1,5 @@
 [global]
-db_driver CSV
-db_database f_dir=@ServerRoot@/db/tt2
-db_option PrintError = 1
+resources @ServerRoot@/conf/uttu.tt2.xml
 
 uri_map_namespace template
 

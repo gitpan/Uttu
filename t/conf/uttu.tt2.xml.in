@@ -1,0 +1,7 @@
+<resources id="tt2.test">
+  <pool id="dbi.uttu">
+    <dbi datasource="dbi:CSV:f_dir=@ServerRoot@/db/tt2"
+         PrintError="1"
+    />
+  </pool>
+</resources>

@@ -7,14 +7,14 @@ sub parse {
 
     my %options;
 
-    $options{Policy} = $xp -> findvalue('@policy', $node) || 'LeastUsage';
-    $options{MaxTry} = $xp -> findvalue('@maxtry', $node);
+    $options{Policy} = "".$xp -> findvalue('@policy', $node) || 'LeastUsage';
+    $options{MaxTry} = "".$xp -> findvalue('@maxtry', $node);
     $options{MaxTry} = 6 unless defined $options{MaxTry} && $options{MaxTry} ne '';
-    $options{SleepOnFail} = [ split(/\s*,\s*/, $xp -> findvalue('@SleepOnFail', $node)) ];
+    $options{SleepOnFail} = [ split(/\s*,\s*/, "".$xp -> findvalue('@SleepOnFail', $node)) ];
     delete $options{SleepOnFail} unless @{$options{SleepOnFail}};
 
-    my $id = $xp -> findvalue('@id', $node);
-    my $xref = $xp -> findvalue('@xref', $node);
+    my $id = "".$xp -> findvalue('@id', $node);
+    my $xref = "".$xp -> findvalue('@xref', $node);
     my $loadbalancer;
     if($id) {
         $id = "${prefix}.${id}" if defined $prefix;
@@ -41,8 +41,8 @@ sub parse {
     }
 
     %options = ( );
-    $options{Weight} = $xp -> findvalue('@weight', $node);
-    $options{SuspendTimeout} = $xp -> findvalue('@suspendtimeout', $node) || 5;
+    $options{Weight} = "".$xp -> findvalue('@weight', $node);
+    $options{SuspendTimeout} = "".$xp -> findvalue('@suspendtimeout', $node) || 5;
 
     if(wantarray) {
         return($loadbalancer, %options);
