@@ -1,0 +1,50 @@
+<perl>
+  use lib "../lib";
+  use lib map {("../blib/$_", "../../blib/$_")} qw(lib arch);
+</perl>
+
+PerlModule Uttu
+
+PerlTransHandler Uttu
+
+<perl>
+    my($has_mason, $has_tt2, $has_axkit) = (0,0,0);
+    eval { require HTML::Mason; };
+    $has_mason = 1 unless $@;
+
+    eval { require Template; };
+    $has_tt2 = 1 unless $@;
+
+    eval { require AxKit; };
+    $has_axkit = 1 unless $@;
+
+    if($has_mason) {
+        $Location{'/mason/'} = {
+            UttuConf => 'conf/uttu.mason',
+        };
+    }
+
+    if($has_tt2) {
+        $Location{'/tt2/'} = {
+            UttuConf => 'conf/uttu.tt2',
+        };
+    }
+
+    if($has_axkit) {
+        $Location{'/axkit/'} = {
+            UttuConf => 'conf/uttu.axkit',
+        };
+
+        if($has_mason && -e 'conf/uttu.axkit.mason') {
+            $Location{'/axkit-mason/'} = {
+                UttuConf => 'conf/uttu.axkit.mason',
+            };
+        }
+
+        if($has_tt2 && -e 'conf/uttu.axkit.tt2') {
+            $Location{'/axkit-tt2/'} = {
+                UttuConf => 'conf/uttu.axkit.tt2',
+            };
+        }
+    }
+</perl>

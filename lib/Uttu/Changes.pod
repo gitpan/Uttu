@@ -8,6 +8,31 @@ This document lists the changes to Uttu introduced with each release.  This
 list should not be considered exhaustive.  Major bug fixes and API changes
 should be here.
 
+=head1 VERSION 0.04
+
+=head2 New Features
+
+=over 4
+
+=item Apache::Template
+
+L<Apache::Template|Apache::Template> is now required to use the template 
+content handler.
+
+=item AxKit Document Roots
+
+Added support for multiple document roots similar to that in 
+HTML::Mason and Template Toolkit.
+
+=item Tests
+
+Added tests.  These require L<Apache::Test|Apache::Test>, L<DBI|DBI>, 
+and L<DBD::CSV|DBD::CSV> since the tests need to be run in a web
+server and the database connection code can't be tested without a 
+database to connect to (in this case, CSV files).
+
+=back 4
+
 =head1 VERSION 0.03
 
 =head2 New Features

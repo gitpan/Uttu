@@ -7,13 +7,18 @@ package Uttu::Handler::template;
 use Apache::Constants qw: SERVER_ERROR OK :;
 use AppConfig qw- :argcount -;
 use Data::Dumper;
+use IO::File;
 use Template;
+use Template::Service::Apache;
+use Uttu::Tools ();
 use strict;
 use warnings;
 
-use vars qw{ $REVISION };
+use vars qw{ $REVISION $SERVICE_MODULE};
 
-$REVISION = sprintf("%d.%d", q$Id: template.pm,v 1.4 2002/07/29 03:08:46 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: template.pm,v 1.5 2002/08/06 19:21:51 jgsmith Exp $ =~ m{(\d+).(\d+)});
+
+$SERVICE_MODULE = 'Template::Service::Apache' unless defined $SERVICE_MODULE;
 
 ###
 ### [template] config variables
@@ -75,6 +80,8 @@ sub init {
     },
     template_pre_chomp => {
       ARGCOUNT => ARGCOUNT_NONE,
+    },
+    template_process => {
     },
     template_trim => {
       ARGCOUNT => ARGCOUNT_NONE,
@@ -168,13 +175,14 @@ sub file_to_path {
 
   if(UNIVERSAL::isa($roots, "ARRAY")) {
       foreach my $r (@{$roots}) {
-          my $f = $r->[1] ."/". $prefix  . $path;
+          my $f = $r ."/". $prefix ."/". $path;
+          warn "Looking at $f\n";
           return $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
       }
   } else {
-      return $self ->{_lookup_cache} -> {$path} = 
-             $roots ."/". $prefix . "/" . $path 
-          if -f ($roots ."/". $prefix . "/" . $path) or -d _;
+      my $f = $roots ."/". $prefix . "/" . $path;
+      warn "Looking at $f\n";
+      return $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
   }
 }
 
@@ -185,31 +193,40 @@ sub handle_request {
 
   return SERVER_ERROR unless $ttconfig;
 
-# we need to deal with pathinfo for dhandler-like operation
-  my $params = {
-    u => $u,
-    r => $r,
-  };
+  # following copied from/based on Template::Service::Apache revision 1.2
+  my $SERVICE ||= do {
+        $ttconfig = { %$ttconfig };
 
-  $params -> {lh} = $u -> lh
-    if $u -> config -> global_internationalization;
+        # instantiate new service module
+        my $module = $ttconfig->{ SERVICE_MODULE } || $SERVICE_MODULE;
+        (eval "require $module" && $module->new($ttconfig)) || do {
+            $r->log_reason($module->error(), $r->filename());
+            return SERVER_ERROR;
+        };
+    };
 
-  my $to = Template -> new(%$ttconfig, OUTPUT => $r);
+    my $template = $SERVICE->template($r);
+    return $template unless ref $template;
 
-  $r -> content_type('text/html');
-  $r -> send_http_header;
+    my $params = $SERVICE->params($r);
+    return $params unless ref $params;
 
-  local(*FH);
-  open FH, "<" . $r -> filename or return $self->fail($r, SERVER_ERROR, $!);
+    @{$params}{qw(u r)} = ($u, $r);
 
-  unless($to -> process(\*FH, $params)) {
-    close FH;
-    return $self->fail($r, SERVER_ERROR, $to -> error);
-  }
+    $params -> {lh} = $u -> lh
+      if $u -> config -> global_internationalization;
 
-  close FH;
+    my $content = $SERVICE->process($template, $params);
+    unless (defined $content) {
+        $r->log_reason($SERVICE->error(), $r->filename());
+        return SERVER_ERROR;
+    }
 
-  return OK;
+    $SERVICE->headers($r, $template, \$content);
+
+    $r->print($content);
+
+    return OK;
 }
 
 sub shandle_request {
@@ -217,28 +234,40 @@ sub shandle_request {
 
   my $ttconfig = $self -> ttconfig;
 
-  return \q<> unless $ttconfig;
+  return SERVER_ERROR unless $ttconfig;
 
-  # we need to deal with pathinfo for dhandler-like operation
-  my $params = {
-    u => $u,
-    r => $r,
-  };
+  # following copied from/based on Template::Service::Apache revision 1.2
+  my $SERVICE ||= do {
+        $ttconfig = { %$ttconfig };
 
-  $params -> {lh} = $u -> lh
-    if $u -> config -> global_internationalization;
+        # instantiate new service module
+        my $module = $ttconfig->{ SERVICE_MODULE } || $SERVICE_MODULE;
+        (eval "require $module" && $module->new($ttconfig)) || do {
+            $r->log_reason($module->error(), $r->filename());
+            die SERVER_ERROR;
+        };
+    };
 
-  my $to = Template -> new(%$ttconfig);
+    my $template = $SERVICE->template($r);
+    die $template unless ref $template;
 
-  local(*FH);
-  open FH, "<" . $r -> filename or return \q<>;
+    my $params = $SERVICE->params($r);
+    die $params unless ref $params;
+    
+    @{$params}{qw(u r)} = ($u, $r);
+    
+    $params -> {lh} = $u -> lh  
+      if $u -> config -> global_internationalization;
+    
+    my $content = $SERVICE->process($template, $params);
+    unless (defined $content) {
+        $r->log_reason($SERVICE->error(), $r->filename());
+        die SERVER_ERROR;
+    }
+  
+    $SERVICE->headers($r, $template, \$content);
 
-  my $content;
-  $to -> process(\*FH, $params, \$content);
-
-  close FH;
-
-  return \$content;
+    return \$content;
 }
 
 sub fail {
@@ -304,7 +333,9 @@ sub config {
 
   my $config = { };
 
-  my @roots = @{$c -> template_include_path || [ Apache -> server_root_relative("local") ]};
+  my @roots = map { Uttu::Tools::server_root_relative($_) } 
+                  @{$c -> template_include_path || [ Apache -> server_root_relative("local") ]};
+
 
   if(defined $c -> global_framework) {
     push @roots, $Uttu::Config::PREFIX . "/functionsets/" . $c -> global_framework . "/";
@@ -316,6 +347,8 @@ sub config {
 
   $config -> {INCLUDE_PATH} = 
       join($c -> template_delimiter || ":", @roots);
+
+  $self -> {_template_include_path} = [ @roots ];
 
   foreach my $i (keys %items) {
     $config -> {$items{$i}} = $c -> get($i) if $c -> get($i);
@@ -346,7 +379,8 @@ Uttu::Handler::template
 
 By setting the global content_handler configuration variable to template,
 L<Template|Template> will be called to parse the web pages and create the
-content.
+content.  This module depends on L<Apache::Template|Apache::Template> to 
+provide the Template service handler.
 
 =head1 GLOBALS
 

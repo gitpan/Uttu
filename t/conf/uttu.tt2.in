@@ -1,0 +1,22 @@
+[global]
+db_driver CSV
+db_database f_dir=@ServerRoot@/db/tt2
+db_option PrintError = 1
+
+uri_map_namespace template
+
+-internationalization
+uri_mapping
+
+index index.html
+
+handle .html
+
+content_handler template
+
+[template]
+
+absolute
+include_path pages/tt2
+delimiter :
+debug

@@ -16,7 +16,7 @@ use warnings;
 
 use vars qw{ $REVISION };
 
-$REVISION = sprintf("%d.%d", q$Id: axkit.pm,v 1.2 2002/07/29 03:08:19 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: axkit.pm,v 1.4 2002/08/06 19:47:35 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 ###
 ### [axkit] config variables
@@ -118,6 +118,9 @@ sub init {
         axkit_plugin => {
             ARGCOUNT => ARGCOUNT_LIST,
         },
+        axkit_document_root => {
+            ARGCOUNT => ARGCOUNT_LIST,
+        },
 #
 # following axkit_process_* based on html4.0 media descriptors
 #  (see http://www.w3.org/TR/REC-html40/types.html)
@@ -167,6 +170,15 @@ sub file_to_path {
 
   return $secondary -> file_to_path($prefix, $path) if $secondary;
 
+  return $self ->{_lookup_cache} -> {$path}
+      if $self ->{_lookup_cache} -> {$path};
+      
+  my $roots = $self -> axkitconfig -> _DocumentRoots();
+
+  foreach my $r (@{$roots}) {
+      my $f = $r->[1] ."/". ($r->[0] eq 'function_sets' ? "" : $prefix . "/") . $path;
+      return $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
+  }
   return undef;  # let Apache handle it, in other words
 }
 
@@ -300,41 +312,90 @@ TODO: describe each of the configuration variables.
 
 =item cache_dir
 
+This option takes a single argument and sets the directory that the 
+cache module stores its files in.  No caching will take place if 
+this is not set.  To disable caching, unset this option.
+
 =item cache_provider
 
 =item content_provider
 
 =item debug_level
 
+If present, this makes AxKit send output to Apche's error log.  
+The valid range is 0-10, with 10 producing more output.
+
 =item debug_stack_trace
+
+This flag option says whether to maintain a stack trace with every 
+exception.
 
 =item debug_time
 
 =item debug_trace_intermediate
 
+With this option, you advise AxKit to store the result of each 
+transformation request in a special directory for debugging.
+
 =item dependency_checks
+
+=item document_root
 
 =item error_stylesheet
 
+If an error occurs during processing that throws an exception, the 
+exception handler will try and find an ErrorStylesheet to use to 
+process an XML-formatted error page.
+
 =item gzip_output
+
+This option allows you to use the L<Compress::Zlib|Compress::Zlib> 
+module to gzip output to browsers that support gzip compressed pages.
 
 =item handle_dirs
 
+This option allows AxKit to process directories.
+
 =item ignore_style_pi
+
+Turn off parsing and overriding stylesheet selection for XML files 
+containing an "xml-stylesheet" processing instruction at the start 
+of the file.
 
 =item log_declines
 
+This option is a flag (default off).  When AxKit declines to 
+process a URI, it gives a reason.  Normally this reason is not 
+sent to the log.  However, if this option is set, the reason is 
+logged.
+
 =item map_style
+
+This option maps module stylesheet MIME types to stylesheet 
+processor modules.
 
 =item output_charset
 
+Fixes the output character set, rather than using either UTF-8 or 
+the user's preference from the Accept-Charset HTTP header.
+
 =item output_transformer
+
+This option may be used to list output transformers that are 
+applied just before output is sent to the browser.
 
 =item plugin
 
+This option may be used to list multiple modules whose C<handler> 
+method is called before any AxKit processing is done.
+
 =item preferred_media
 
+This specifies a default meda type to use.
+
 =item preferred_style
+
+This specifies a  default stylesheet title to use.
 
 =item process_E<lt>mediaE<gt>
 
@@ -356,8 +417,17 @@ it allows Apache to find them.
 
 =item translate_output
 
+This option enables output character set translation.
+
 =item xsp_taglib
 
+XSP supports two types of tag libraries.  The simplest type to 
+understand is merely an XSLT or XPathScript (or other transformation 
+language) stylesheet that transforms custom tags into the "raw" XSP 
+tag form.  However thre is another kind that is faster, and these 
+taglibs transform the custom tags into pure code which then gets 
+compiled.  These taglibs must be loaded into the server using this 
+option.
 
 =back 4
 
@@ -368,6 +438,9 @@ L<AxKit>.
 =head1 AUTHOR
 
 James G. Smith <jsmith@cpan.org>
+
+Much of the configuration option documentation is based on the 
+documentation in the AxKit module.
 
 =head1 COPYRIGHT
 

@@ -40,10 +40,10 @@ use Data::Dumper;
 
 use vars qw: %variables %configs :;
 
-our $VERSION = "0.03";
+our $VERSION = "0.04";
 
 { no warnings;
-our $REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.10 2002/07/29 02:44:41 jgsmith Exp $ =~ m{(\d+).(\d+)});
+our $REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.11 2002/08/06 19:23:25 jgsmith Exp $ =~ m{(\d+).(\d+)});
 }
 
 my $self_for_config;
@@ -178,14 +178,18 @@ sub _validate_framework {
 
       my $ret = eval qq{require $framework;};
 
+      warn $@ if $@;
+
       return unless $ret;
 
       eval { $ret = $framework -> init(); };
+      warn $@ if $@;
 
       return unless $ret;
       return if $@;
 
       eval { $ret = $framework -> init_config($config_for_define); };
+      warn $@ if $@;
 
       return unless $ret;
       return if $@;
@@ -740,7 +744,8 @@ sub query_dbh {
   my $info = $self -> {_dbh_cache}->{"$prefix:$suffix"};
   my $current = $info -> {host} -> [0];
   my $dbh = DBIx::Abstract -> connect({
-      dsn => join(":", "dbi", $info->{driver}, "database=" . $info->{database}, "host=".$current),
+      dsn => join(":", "dbi", $info->{driver}, 
+          ($info->{database} =~ /=/ ? "" : "database=") . $info->{database}, (defined($current) ? "host=".$current : ())),
       user => $info->{username}, 
       password => $info->{password},
     },

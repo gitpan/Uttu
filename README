@@ -1,24 +1,28 @@
                             ---------
-                            Uttu 0.03
+                            Uttu 0.04
                             ---------
 
-Uttu is a web interface driver that works with a framework and function
-sets to build an application.  Support is provided for building the
-infrastructure for a site -- no demands are made for doing sessions in a
-particular way, or authenticating against a particular database. The actual
-specifics are defined by the framework. This allows you to create your own
-flavor of Uttu, if you desire, without having to muck around in the Uttu
-module. Think of LPC and LPMuds with their driver and mudlib.
+Uttu is a web interface driver that works with a framework and 
+function sets to build an application.  Support is provided for 
+building the infrastructure for a site -- no demands are made for 
+doing sessions in a particular way, or authenticating against a 
+particular database. The actual specifics are defined by the 
+framework. This allows you to create your own flavor of Uttu, if you 
+desire, without having to muck around in the Uttu module. Think of LPC 
+and LPMuds with their driver and mudlib.
 
 To install Uttu, download the distribution, untar, and cd into the
 resulting directory.  There, run the following:
 
   % perl Makefile.PL [UTTU_PREFIX=...]
   % make
+  % make test
   % make install
 
-No non-trivial tests are provided at the moment.  Eventually, the
-Apache::Test framework will be used to test the module.
+If the Apache::Test framework is installed, the tests will be run 
+against an Apache server.  Otherwise, any tests requiring a working 
+Apache server will be skipped.  Any tests requiring uri mappings will 
+be skipped if DBD::CSV is not installed.
 
 The UTTU_PREFIX optional parameter for Makefile.PL configures the default
 installation prefix for frameworks and function sets.  Uttu provides an
@@ -26,8 +30,16 @@ easy way to install these parts of an application.  The default
 installation prefix will be something similar to /usr/local/uttu (depends
 on the Perl configuration).
 
-The author lurks on both the HTML::Mason list and the mod_perl list as 
-well as various IRC channels.  Feel free to send questions there.
+The following modules are required to use the particular handler.  They 
+are not part of the requirements list in the Makefile (and thus CPAN 
+will not try to install them).
+
+  axkit     Axkit
+  mason     HTML::Mason
+  template  Apache::Template
+
+The author lurks on both the mod_perl list as well as various IRC channels.  
+Feel free to send questions there.
 
 
 Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
@@ -35,4 +47,4 @@ Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-$Id: README,v 1.3 2002/07/29 02:23:26 jgsmith Exp $
+$Id: README,v 1.4 2002/08/06 19:22:21 jgsmith Exp $

@@ -1,0 +1,23 @@
+[global]
+db_driver CSV
+db_database f_dir=@ServerRoot@/db/mason
+db_option PrintError = 1
+
+uri_map_namespace mason
+
+-internationalization
+uri_mapping
+
+index index.html
+
+handle .html
+
+content_handler mason
+
+[mason]
+data_dir data/mason
+
+comp_root pages/mason
+
+use_object_files
+use_strict

@@ -45,7 +45,7 @@ sub get_config {
         $cfg{$k} = $c -> get($v);
     }
 
-    $cfg{NoCache} = !$c -> get('axkit_cache'); # boolean
+    $cfg{NoCache} = !$c -> get('axkit_cache_dir'); # boolean
 
     $cfg{ConfigProvider} ||= 'Uttu::Handlers::axkit::ContentProvider'
         if $c -> get('axkit_secondary_handler');
@@ -54,6 +54,37 @@ sub get_config {
         eval "require $c";
         delete $cfg{StyleMap}{$s} if $@;
     }
+
+    my $doc_root = [ ];
+    my %pathnames = ( );
+    if($c -> axkit_document_root) {
+        my $paths = [];
+        my $can_get_by_without_a_name = scalar(@{$c -> axkit_document_root || []}) == 1;
+        if($can_get_by_without_a_name && $c->axkit_document_root->[0] !~ /=/) {
+            $doc_root = [ [ 'local', Uttu::Tools::server_root_relative($c->axkit_document_root->[0]) ] ];
+            $pathnames{local} = ( );
+        } else {
+            foreach my $p (@{$c -> axkit_document_root || []}) {
+                my($n, $d) = split(/\s*=>?\s*/, $p, 2);
+                push @{$paths}, [ $n, Uttu::Tools::server_root_relative($d) ];
+                $pathnames{$n} = ( );
+            }
+            $doc_root = $paths;
+        }
+    }
+    if(defined $c -> global_framework) {
+        push @{$doc_root},
+             [ 'function_sets', $Uttu::Config::PREFIX . "/functionsets/" . $c -> global_framework . "/" ]
+                 unless exists $pathnames{function_sets};
+        unless(exists $pathnames{framework}) {
+            my $p = $INC{'Uttu/Framework/' . $c -> global_framework . ".pm"};
+            $p =~ s{lib/Uttu/Framework/.*$}{};
+            $p ||= $Uttu::Config::PREFIX . "/framework/" . $c -> global_framework;
+            push @{$doc_root}, [ 'framework', $p ];
+        }
+    }
+
+    $cfg{_DocumentRoots} = $doc_root;
 
     my %processors = $c -> varlist("^axkit_process_");
     $cfg{Processors} = { };
@@ -107,3 +138,10 @@ sub get_config {
     $self -> {cfg} = \%cfg;
 }
 
+sub _DocumentRoots {
+    my $self = shift;
+
+    return $self -> {cfg} -> {_DocumentRoots} if defined $self -> {cfg} -> {_DocumentRoots};
+
+    return [];
+}

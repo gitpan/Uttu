@@ -122,10 +122,6 @@ The C<$dsn> string used in the C<DBI-E<gt>connect> call is constructed from this
 
 The default is none.
 
-If multiple C<db_database> lines are present, Uttu will cycle through them
-until it exhausts all available database definitions, or it finds one that
-allows a connection.  This allows failover to alternate databases.
-
 C<db_database> should allow modifications as well as read-only access.
 Uttu itself only neads read access.  C<db_const_database> implies that the
 database will not be modified.
@@ -527,10 +523,9 @@ Uttu looks in two places for the URI to component mapping information:
 internal cache, external database.  The configuration file is used to 
 provide a minimal mapping in case the database is not available.
 
-
-
-
-
+The content handler is used to find the file in the filesystem 
+after the URI has been mapped to a filename.  That is, the content 
+handler may use a series of directories as a path to find the file.
 
 =head1 INTERNATIONALIZATION
 
@@ -620,4 +615,4 @@ Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
-$Id: Uttu.pod,v 1.8 2002/07/29 02:55:21 jgsmith Exp $
+$Id: Uttu.pod,v 1.9 2002/08/06 19:26:45 jgsmith Exp $

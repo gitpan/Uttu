@@ -1,6 +1,6 @@
 package Uttu;
 
-#$Id: Makefile.PL,v 1.6 2002/07/28 06:04:31 jgsmith Exp $
+#$Id: Makefile.PL,v 1.8 2002/08/06 19:22:21 jgsmith Exp $
 
 use ExtUtils::MakeMaker;
 
@@ -13,11 +13,13 @@ eval {
 
 my %content_handlers = (
   HTML::Mason => 1.04,
-  Template => 2.00,
+  Apache::Template => 0.01,
   AxKit => 1.6,
 );
 
 my @available_chs = ( );
+
+my %other_prereqs = ( );
 
 foreach my $ch (keys %content_handlers) {
   no strict;
@@ -32,6 +34,36 @@ unless(@available_chs) {
     warn sprintf("  %-15s %-10s\n", $ch, $content_handlers{$ch});
   }
   warn "\n";
+}
+
+# go ahead and prompt for a suitable content handler to be added to the prereqs list
+
+# also prompt for DBD::CSV to support the tests
+eval {
+    require DBD::CSV;
+};
+
+if($@) {
+    warn "\nUnable to find DBD::CSV.  Some of the tests will be disabled.\n";
+}
+
+#
+# setup test stuff
+#
+
+eval {
+    require Apache::Test;
+    require Apache::TestMM;
+    Apache::TestMM -> import(qw(test clean));
+};
+
+my @scripts;
+
+unless($@) {
+    @scripts = qw(t/TEST t/SMOKE);
+
+    Apache::TestMM::filter_args();
+    Apache::TestMM::generate_script($_) for @scripts;
 }
 
 #
@@ -119,12 +151,18 @@ WriteMakefile(
 		    DBIx::Abstract => 1.00,
 		    Module::Require => 0.02,
 		    mod_perl => 1.24,
+                    %other_prereqs,
 		  },
   depend       => {
 		    pm_to_blib => 'uttu_config',
 		    dist => 'Changes',
 		  },  
+  clean        => {
+                    FILES => "@{ clean_files() }",
+                  },
 );
+
+sub clean_files() { return [@scripts]; };
 
 ###
 ### extensions to MakeMaker

@@ -6,6 +6,23 @@ DESCRIPTION
     This list should not be considered exhaustive. Major bug fixes and API
     changes should be here.
 
+VERSION 0.04
+  New Features
+
+    Apache::Template
+        Apache::Template is now required to use the template content
+        handler.
+
+    AxKit Document Roots
+        Added support for multiple document roots similar to that in
+        HTML::Mason and Template Toolkit.
+
+    Tests
+        Added tests. These require Apache::Test, DBI, and DBD::CSV since the
+        tests need to be run in a web server and the database connection
+        code can't be tested without a database to connect to (in this case,
+        CSV files).
+
 VERSION 0.03
   New Features
 
