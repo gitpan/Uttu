@@ -10,11 +10,9 @@ use File::Path ();
 use Data::Dumper;
 use Carp;
 
-use vars qw: $VERSION $REVISION @ISA @options :;
+use vars qw: $REVISION @ISA @options :;
 
-$VERSION = 0.01;
-
-$REVISION = sprintf("%d.%d", q$Id: MakeMaker.pm,v 1.3 2002/03/20 17:53:34 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: MakeMaker.pm,v 1.6 2002/04/15 22:27:01 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 
 # ExtUtils::MakeMaker >= 5.49_01 (might) require the following
@@ -101,16 +99,20 @@ sub new {
   # making a framework.)  Not for now.
 
   if($self->{PREREQ_FRAMEWORK}) { # we have a function set
+    warn "Looks like a function set...\n";
     my $framework = "Uttu::Framework::$$self{PREREQ_FRAMEWORK}[0]";
+    #$framework =~ s{^(Uttu::Framework::(.+?))::.*}{$1};
+    #$self -> {FRAMEWORK} = $2;
+    $self -> {FRAMEWORK} = $$self{PREREQ_FRAMEWORK}[0];
 
     $self->{PREREQ_PM}->{$framework} = $self->{PREREQ_FRAMEWORK}[1];
 
-    $self->{PREFIX} ||= File::Spec->catfile($Uttu::Config::PREFIX, "functionsets", $framework);
+    $self->{PREFIX} ||= File::Spec->catfile($Uttu::Config::PREFIX, "functionsets", $self -> {FRAMEWORK});
     $self->{LIB} ||= File::Spec -> catfile($self->{PREFIX}, "lib");
 
     push @INC, $self->{LIB};
-    push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "framework", $framework, "lib");
-    push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "functionsets", $framework, "lib");
+    push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "framework", $self -> {FRAMEWORK}, "lib");
+    push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "functionsets", $self -> {FRAMEWORK}, "lib");
 
     if($self->{PREREQ_FCTN}) {
       foreach my $p (keys %{$self->{PREREQ_FCTN}||{}}) {
@@ -121,6 +123,7 @@ sub new {
     my $framework = $self->{FRAMEWORK} || $self->{NAME} || caller;
 
     if($framework =~ m{^Uttu::Framework::[^:]+$}) {
+      warn "Looks like a framework...\n";
       $framework =~ s{^.*::}{};
 
       $self->{PREFIX} ||= File::Spec -> catfile($Uttu::Config::PREFIX, "framework", $framework);
@@ -128,18 +131,19 @@ sub new {
       $self->{FRAMEWORK} ||= $framework;
 
     } else { # we really have a function set
+      warn "Looks like a function set...\n";
 
       $framework =~ s{^(Uttu::Framework::(.+?))::.*}{$1};
       $self -> {FRAMEWORK} = $2;
       $self->{PREREQ_FRAMEWORK} = [ $framework => 0 ];
       $self->{PREREQ_PM}->{$framework} = 0;
 
-      $self->{PREFIX} ||= File::Spec -> catfile($Uttu::Config::PREFIX, "functionsets", $framework);
+      $self->{PREFIX} ||= File::Spec -> catfile($Uttu::Config::PREFIX, "functionsets", $self -> {FRAMEWORK});
       $self->{LIB} ||= File::Spec -> catfile($self->{PREFIX}, "lib");
 
       push @INC, $self -> {LIB};
-      push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "framework", $framework, "lib");
-      push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "functionsets", $framework, "lib");
+      push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "framework", $self -> {FRAMEWORK}, "lib");
+      push @INC, File::Spec -> catfile($Uttu::Config::PREFIX, "functionsets", $self -> {FRAMEWORK}, "lib");
 
       if($self->{PREREQ_FCTN}) {
 	foreach my $p (keys %{$self->{PREREQ_FCTN}||{}}) {
@@ -187,30 +191,67 @@ sub post_initialize_FUNCTIONSET {
   #    looking in '.')
 
   foreach my $d (@{$setdir || []}) {
+    next unless -d $d;
     if($d eq '.') {
       File::Find::find 
         sub {  
-          if(!m{$sep} && -d $_ && (-f "$_.pm" || -f "$_$sep$_.pm")) {
-	    push @sets, $_;
-          }
+	  #warn ">> $_\n";
+	  push @sets, File::Spec->canonpath($File::Find::name)
+            if !m{$sep} && -d $_ && (-f "$_.pm" || -f "$_$sep$_.pm");
         }, $d;
     } else {
       File::Find::find
         sub {
-          if(!m{$sep} && -d $_) {
-            push @sets, $_;
-          }
+          push @sets, "$d$sep$_"
+            if !m{$sep} && -d $_ && $_ ne '.';
         }, $d;
     }
   }
 
-  warn "Sets found in: " . join("; ", @sets) . "\n";
+  # make sure we have no duplicates
+  @sets = keys %{ {map { $_ => undef } @sets} };
+
+  #warn "Sets found in: " . join("; ", @sets) . "\n";
 
   # need to make "sets" configurable
   $self -> {INSTSETDIR} ||= File::Spec -> catfile($$self{PREFIX}, "sets");
 
   # we have .pm files to install in lib/ and other files for sets/
+  foreach my $d (@sets) {
+    File::Find::find 
+      sub { 
+	$self -> {SETS} -> {File::Spec->canonpath($File::Find::name)} = $d 
+	  unless -d $_ 
+      }, $d;
+  }
+  foreach my $s (keys %{$self -> {SETS}}) {
+    my $d = $self -> {SETS} -> {$s};
+    delete $self -> {SETS} -> {$s};
+    next if $s =~ /\.pm$/;
+    my $ss = $s;
+    my $set = $d;
+    $set = $1 if $d =~ m{$sep(.*?)$};
+    $ss =~ s{^$d$sep*}{};
+    $self -> {SETS} -> {$s} = File::Spec -> catfile("\$(INSTSETDIR)$sep$set", $ss);
+  }
 
+  # remove non-module, pod, or .pl files
+  delete @{$self -> {PM}}{grep !m{\.p(m|od|l)$}, keys %{$self -> {PM}||{}}};
+
+  # put l10n/ files in the right place (Uttu::Framework::$framework::L10N::$frameset.pm)
+  foreach my $m (grep m{^l10n$sep}, keys %{$self -> {PM}||{}}) {
+    $self -> {PM} -> {$m} =~ s{${sep}l10n$sep}{${sep}L10N$sep}i;
+  }
+
+  # make sure functionset modules are in the right place
+  my $pat = "(" . join("|", @sets, File::Spec->no_upwards(@{$setdir || []})) . ")";
+  foreach my $m (grep !m{^(lib|l10n)$sep}, keys %{$self -> {PM}||{}}) {
+    $self->{PM} ->{$m} =~ s{^\$\(INST_LIBDIR\)$sep$pat$sep}{\$\(INST_LIBDIR\)$sep};
+    #warn "$m -> ", $self->{PM} ->{$m}, "\n";
+  }
+
+  ##warn "PM files: ", Data::Dumper->Dump([$self -> {PM}]), "\n";
+  #warn "Set files: ", Data::Dumper->Dump([$self -> {SETS}]), "\n";
 }
 
 sub post_initialize_FRAMEWORK {
@@ -234,7 +275,6 @@ sub post_initialize_FRAMEWORK {
     my $ss = $s;
     $ss =~ s{^$d$sep*}{};
     $self -> {SETS} -> {$s} = File::Spec -> catfile("\$(INSTSETDIR)", $ss);
-    warn "(d = $d) $s => $ss\n";
   }
 
   my $supportdir = $self -> {SUPPORTDIR} || [ 'support' ];
@@ -247,7 +287,6 @@ sub post_initialize_FRAMEWORK {
     my $ss = $s;
     $ss =~ s{^$d$sep*}{};
     $self -> {SUPPORT} -> {$s} = File::Spec -> catfile("\$(PREFIX)", $ss);
-    warn "(d = $d) $s => $ss\n";
   }
 
   my $l10ns = File::Spec -> catfile("\$(INST_LIBDIR)", "l10n") . $sep;
@@ -272,7 +311,7 @@ sub post_initialize_FRAMEWORK {
   # now to look for function set pages...
   # sets/xxx/page -> $prefix/framework/$framework/sets/xxx/page
   # sets/xxx/xxx.pm -> \$(INST_LIBDIR)/$$self{FRAMEWORK}/xxx.pm"
-  warn Data::Dumper -> Dump([$self]). "\n";
+  #warn Data::Dumper -> Dump([$self]). "\n";
 }
 
 sub clean {
@@ -281,7 +320,7 @@ sub clean {
   # add files to $attribs{FILES} here
   $attribs{FILES}  = "" unless defined $attribs{FILES};
 
-  $attribs{FILES} = join(" ", ($attribs{FILES} ? ($attribs{FILES}) : ()), qw: ./locale ./t/conf/uttu.conf ./t/conf/extra.conf.in :);
+  $attribs{FILES} = join(" ", ($attribs{FILES} ? ($attribs{FILES}) : ()), qw: ./t/conf/uttu.conf ./t/conf/extra.conf.in :);
 
   return $self -> SUPER::clean(%attribs);
 }
@@ -312,24 +351,12 @@ INSTSETDIR = $$self{INSTSETDIR}
 
 
 #
-# need rules for gettext stuff, etc
-#
-# set/<funcset>/        -> set/<funcset>/
+# sets/<funcset>/        -> sets/<funcset>/
 # lib/  <handled by ExtUtils stuff>
 # conf/uri_map             -> should be in the form of map_uri <uri> <funcset>/<file>
 # conf/uttu.conf.in           -> combined with navigation and path info => uttu.conf suitable for testing
+# conf/httpd.conf.in         -> goes to t/conf/httpd.conf.in (or something like that)
 # t/                           -> testing handled by ExtUtils
-
-#sub c_o {
-#  my $self = shift;
-#
-#  my @m = $self -> SUPER::c_o(@_);
-#
-#  push @m, <<1HERE1;
-#1HERE1
-#
-#  join '', @m;
-#}
 
 # FCTN => hashref of set/<funcset>/ directories to be installed pointing to installed location
 #         this overrides FCTNDIRS
@@ -356,6 +383,8 @@ sub postamble {
   if($@) {
     $has_apache_test = 0;
     warn "\nUnable to find Apache::Test.  Disabling automatic test creation.\n\n";
+  } else {
+    warn "\nApache::Test found; enabling tests.  Be aware that tests are experimental.\n\n";
   }
 
   push @m, <<1HERE1;
@@ -403,6 +432,8 @@ uttu_test :
 
 1HERE1
   }
+
+  #warn Data::Dumper -> Dump([$self]) . "\n";
 
   join('',@m);
 }
@@ -598,6 +629,19 @@ commandline:
 
   perl Makefile.PL PREFIX=/some/path LIB=/some/path/to/lib
 
+Note that the defaults are based on C<$Uttu::Config::PREFIX>:
+
+  PREFIX="${Uttu::Config::PREFIX}/functionsets/$framework";
+  LIB="${PREFIX}/lib";
+
+or (for frameworks):
+
+  PREFIX="${Uttu::Config::PREFIX}/framework/$framework";
+  LIB="${PREFIX}/lib";
+
+If C<PREFIX> or C<LIB> are specified on the command line, they will not
+have C</functionsets/$framework> or C</framework/$framework> appended.
+
 =head2 Configuration
 
 Uttu::MakeMaker recognizes all the arguments for ExtUtils::MakeMaker.  In
@@ -612,7 +656,8 @@ This defines the framework being installed.  This should only be set if
 installing a framework.
 
 This defaults to the last component of the C<NAME> parameter or the last
-component of the calling package.
+component of the calling package if the calling package is in the form
+"Uttu::Framework::$framework" (with only two sets of "::").
 
 =item PREREQ_FRAMEWORK => [ $framework => $version ]
 
@@ -628,23 +673,9 @@ This is a hash of function sets mapped to versions.  This has meaning only
 if C<PREREQ_FRAMEWORK> is defined.  This should only be set if the
 Makefile.PL is for a function set.
 
-This adds C<Uttu::Framework::$framework::$frameset> to the C<PREREQ_PM>
-configuration argument with the given version.
-
-=item FCTN => { function_set => install_location }
-
-This is a list of function sets and the directories to which they will be
-installed.  This overrides C<FCTNDIRS> and C<FCTN_DIR>.
-
-=item FCTN_DIR => $install_subdir
-
-This is the directory under the prefix which holds the function set
-documents.  This corresponds to the C<global_function_set_base>
-configuration variable.
-
-Function set documents are installed into C<$PREFIX/$FCTN_DIR/$set_name/>.
-
-The default is C<set>.
+This adds C<Uttu::Framework::$framework::$function_set> to the C<PREREQ_PM>
+configuration argument with the given version.  Do not include
+C<Uttu::Framework::$framework> in the keys.
 
 =item FCTNDIRS => [ directory list ]
 
@@ -656,21 +687,23 @@ For example, if C<FCTNDIRS => [ sets ]>, then C<sets/Auth/*> would denote
 all the documents (e.g., HTML::Mason components) for the C<Auth> function
 set that are available for export to the web.
 
-The default value for C<FCTNDIRS> is C<sets>.
+The default value for C<FCTNDIRS> is C<.> and C<sets>.
 
 =back 4
 
 =head1 BUGS (a.k.a. TODO LIST)
 
-=head2 Function Set support
-
-Uttu::MakeMaker does not yet have complete support for function sets.
-Please do not expect it to work.  The configuration items for function sets
-are subject to change.
-
 =head2 URI Map Installation
 
 Installation of URI-to-filename maps is not yet supported.
+
+=head2 Testing
+
+Testing during the build/installation process is not yet supported.
+
+=head1 SEE ALSO
+
+L<ExtUtils::MakeMaker>.
 
 =head1 AUTHOR
 

@@ -1,23 +1,21 @@
 package Uttu::Handler::mason;
 
-# $Id: mason.pm,v 1.2 2002/03/20 17:53:40 jgsmith Exp $
-
 #
 # comments in this file assume you have read the documentation (Uttu.pod)
 #
 
 use Apache::Constants qw: SERVER_ERROR :;
 use AppConfig qw- :argcount -;
+use Data::Dumper;
 use HTML::Mason;
 use HTML::Mason::ApacheHandler args_method => 'mod_perl';
 use strict;
 use warnings;
 
-use Data::Dumper;
+use vars qw{ $REVISION };
 
-use vars qw: $VERSION :;
+$REVISION = sprintf("%d.%d", q$Id: mason.pm,v 1.4 2002/04/15 22:27:04 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
-$VERSION = "0.01";
 
 ###
 ### [mason] config variables
@@ -30,7 +28,7 @@ sub _setting_path {
     my($self, $variable, $value) = @_;
     return 1 if $doing_config;
     $doing_config = 1;
-    $self -> set($variable, Apache -> server_root_relative($value));
+    $self -> set($variable, Uttu::Tools::server_root_relative($value));
         #unless $value =~ m{^/};
     $doing_config = 0;
     return 1;
@@ -206,24 +204,39 @@ sub config {
 
    my $self = bless { } => $class;
 
-   my $s = $param -> server();
-   my $hostname = ($c -> global_hostname || [$s -> server_hostname]) -> [0];
+   my($s, $hostname);
+
+   if($ENV{MOD_PERL}) {
+     $s = $param -> server();
+     if(@{$c -> global_hostname || []}) {
+       $hostname = $c -> global_hostname -> [0];
+     } else {
+       $hostname = $s -> server_hostname;
+     }
+   }
 
   if(!$c -> mason_in_package) {
-    # default package: Uttu::Sites::$server::$port::$location
+    if($ENV{MOD_PERL}) {
+      # default package: Uttu::Sites::$server::$port::$location
 
-    my $loc = $param -> path();
+      my $loc = $param -> path();
 
-    $loc =~ s{/}{::}g;
-    $loc =~ s{ }{_}g;
+      $loc =~ s{/}{::}g;
+      $loc =~ s{ }{_}g;
 
-    my $h = $hostname;
-    $h =~ s{\.}{_}g;
-    my $p = join("::", "Uttu::Sites", $h, "Port_" . ($s -> port || 80) );
-    $p .= $loc unless $loc eq '::';
-    $p =~ s{::$}{};
+      my $h = $hostname;
+      $h =~ s{\.}{_}g;
+      my $p = join("::", "Uttu::Sites", $h, "Port_" . ($s -> port || 80) );
+      $p .= $loc unless $loc eq '::';
+      $p =~ s{::$}{};
     
-    $c -> mason_in_package($p);
+      $c -> mason_in_package($p);
+    } else {
+      my $count if 0;
+      $count ||= "M001";
+      $c -> mason_in_package("Uttu::Sites::$count");
+      $count++;
+    }
   }
 
   if($c -> mason_use) {
@@ -236,9 +249,9 @@ sub config {
 
 
   $c -> mason_status_title("Uttu - " . $hostname . ":" 
-                                    . $c -> global_port 
+                                    . ($c -> global_port || $s -> port || 80)
                                     . $param->path())
-      unless $c -> mason_status_title;
+      unless !$ENV{MOD_PERL} || $c -> mason_status_title;
 
   my $comp_root = [ ];
   my %pathnames = ( );
@@ -246,12 +259,12 @@ sub config {
     my $paths = [];
     my $can_get_by_without_a_name = scalar(@{$c -> mason_comp_root || []}) == 1;
     if($can_get_by_without_a_name && $c->mason_comp_root->[0] !~ /=/) {
-      $comp_root = [ [ 'local', Apache->server_root_relative($c->mason_comp_root->[0]) ] ];
+      $comp_root = [ [ 'local', Uttu::Tools::server_root_relative($c->mason_comp_root->[0]) ] ];
       $pathnames{local} = ( );
     } else {
       foreach my $p (@{$c -> mason_comp_root || []}) {
         my($n, $d) = split(/\s*=>?\s*/, $p, 2);
-        push @{$paths}, [ $n, Apache -> server_root_relative($d) ];
+        push @{$paths}, [ $n, Uttu::Tools::server_root_relative($d) ];
         $pathnames{$n} = ( );
       }
       $comp_root = $paths;
@@ -305,26 +318,52 @@ sub config {
     $interp_options{static_file_root} = $c -> mason_static_file_root if $c -> mason_static_file_root;
     $interp_options{system_log_file}  = $c -> mason_system_log_file if $c -> mason_system_log_file;
 
-    # configure apache handler
-    my $ah = new HTML::Mason::ApacheHandler(
+    my %handler_options = (
       auto_send_headers   => $c -> mason_auto_send_headers,
       decline_dirs        => $c -> mason_decline_dirs,
-      apache_status_title => $c->mason_status_title,
-      interp              => new HTML::Mason::Interp ( 
-          %interp_options,
-          parser                   => new HTML::Mason::Parser (
-              allow_globals        => [ @{$c -> mason_allow_global}, qw($r $u) ],
-              ignore_warnings_expr => $c -> mason_ignore_warnings_expr,
-              in_package           => $c -> mason_in_package,
-              taint_check          => $c -> mason_taint_check,
-              use_strict           => $c -> mason_use_strict,
-              postamble            => join(" ", @{$c -> mason_postamble || []}),
-              preamble             => join(" ", @{$c -> mason_preamble  || []}),
-          )
-      )
     );
+
+
+    $handler_options{apache_status_title} = $c->mason_status_title if $c->mason_status_title;
+      
+
+    # configure apache handler
+    my $ah;
+    if($HTML::Mason::VERSION >= 1.09) {
+      $ah = new HTML::Mason::ApacheHandler(
+        %handler_options,
+        %interp_options,
+        parser                   => new HTML::Mason::Parser (
+            allow_globals        => [ @{$c -> mason_allow_global}, qw($r $u) ],
+            ignore_warnings_expr => $c -> mason_ignore_warnings_expr,
+            in_package           => $c -> mason_in_package,
+            taint_check          => $c -> mason_taint_check,
+            use_strict           => $c -> mason_use_strict,
+            postamble            => join(" ", @{$c -> mason_postamble || []}),
+            preamble             => join(" ", @{$c -> mason_preamble  || []}),
+        )
+      );
+    } else {
+      $ah = new HTML::Mason::ApacheHandler(
+        %handler_options,
+        interp              => new HTML::Mason::Interp ( 
+            %interp_options,
+            parser                   => new HTML::Mason::Parser (
+                allow_globals        => [ @{$c -> mason_allow_global}, qw($r $u) ],
+                ignore_warnings_expr => $c -> mason_ignore_warnings_expr,
+                in_package           => $c -> mason_in_package,
+                taint_check          => $c -> mason_taint_check,
+                use_strict           => $c -> mason_use_strict,
+                postamble            => join(" ", @{$c -> mason_postamble || []}),
+                preamble             => join(" ", @{$c -> mason_preamble  || []}),
+            )
+        )
+      );
+    }
     $self -> set_ah($ah);
-    chown (Apache->server->uid, Apache->server->gid, $ah -> interp -> files_written);
+    if($ENV{MOD_PERL}) {
+      chown (Apache->server->uid, Apache->server->gid, $ah -> interp -> files_written);
+    }
   };
   if($@) {
     warn "Unable to create HTML::Mason interpretor: $@\n";
@@ -506,6 +545,16 @@ The default is true.
 File name used for dhandlers.
 
 The default is C<dhandler>.
+
+To use a dhandler, map the directory containing the dhandler to a uri
+directory.  For example:
+
+  map_uri /cm = my-cm/
+
+This will map C</cm/(.*)> to C<my-cm/$1> where the dhandler is
+C<my-cm/dhandler> (using the default dhandler name) if the uri is one that
+is normally translated and handled by the content handler (the extension on
+the uri must be one mentioned in a C<handle> configuration line).
 
 =item ignore_warnings_expr
 

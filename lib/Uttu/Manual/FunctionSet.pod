@@ -1,0 +1,111 @@
+=head1 NAME
+
+Uttu::Manual::FunctionSet - Description of function sets.
+
+=head1 DESCRIPTION
+
+A function set is a collection of content files and Perl modules that
+together provide a functional module for an application, such as e-mail,
+user management, or announcements.  A function set typically is written
+with a particular framework in mind, so it expects authentication and
+session information, for example, to be stored in a particular manner.
+
+A function set has a name, usually a single word.  If it has a
+configuration module associated with it, it needs to be the same name as
+the module.
+
+A function set may have any or all of the following parts.
+
+=over 4
+
+=item sets/
+
+This is the default directory in which function sets are placed in a
+distribution.  These may be auxiliary sets that are logical subdivisions in
+support of the primary function set for which the distribution may be
+named.
+
+All subdirectories under this directory are considered function sets.  A
+configuration module is not required.
+
+=item ./xxx.pm  ./xxx/
+
+If a directory is in the top level source directory and either a module exists in the top level directory with the same name,
+or such a module exists within the directory, then that directory is considered a function set.  The module is used to
+configure the function set.
+
+For example, the following is a valid function set:
+
+  ./xxx.pm
+  ./xxx/*
+
+as well as
+
+  ./xxx/xxx.pm
+  ./xxx/*
+
+=item l10n/xxx.pm  l10n/xxx/*
+
+These are the language modules.  These will be installed under
+C<$uttu_prefix/functionsets/$framework/lib/perl/Uttu/Framework/$framework/L10N/xxx*>.
+
+=item lib/
+
+Files here are treated as in a normal Perl module distribution.
+
+=back
+
+Function sets may use the L<Uttu::MakeMaker|Uttu::MakeMaker> module in a
+Makefile.PL to provide an installation method that mirrors that of standard
+modules on CPAN.  See L<Uttu::MakeMaker> for more information.
+
+ % perl Makefile.PL PREFIX=<$uttu_prefix> \
+                    ... # other ExtUtils::MakeMaker options
+ % make
+ % make install
+
+=head2 Web Pages
+
+Any web pages provided by the set will usually be run through the content
+handler.  These should be placed under C<$function_set_base/xxx/>.  URI to
+file mappings are provided in a different part of the function set.
+
+=head2 Configuration
+
+Configuration modules should be installed as
+C<Uttu::Framework::$global_framework::xxx>.  These modules will be loaded
+automatically during server startup and are responsible for defining any
+configuration variables as well as registering components needed by the
+framework.
+
+=head2 URI to Component Mapping
+
+The mapping of URI to component can be done either as an addition to the
+configuration file (not recommended) or as an addition to the SQL tables
+(recommended).  The mapping should be provided as a plain text file with
+one URI to component mapping per line.  The URIs are relative to the
+absolute URI location of this function set.  The component names are
+relative to the component installation directory (usually
+C<$function_set_base/>).
+
+For example,
+
+  # URI           component
+  index.html      xxx/index.html
+  quota/edit.html xxx/edit.html
+  queue/view.html xxx/view-queue.html
+
+=head1 AUTHOR
+
+James G. Smith <jsmith@cpan.org>
+
+The descriptions of the Mason configuration variables are based on the
+Template documentation.
+
+=head1 COPYRIGHT
+
+Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
+
+This module is free software; you can redistribute it and/or
+modify it under the same terms as Perl itself.
+

@@ -9,7 +9,8 @@ In httpd.conf:
   PerlModule Uttu
   PerlTransHandler Uttu
   <Location "/some/uri">
-      UttuConf conf/uttu.conf
+      UttuDefine variable value
+      UttuConf conf/uttu.conf conf/my.conf
   </Location>
 
 =head1 DESCRIPTION
@@ -41,9 +42,39 @@ variables for the configuration file.
 
  UttuConf configuration/file
 
-This will read in the specified file and set up the content handler object.  If
-the file is given with a relative path, it is understood to be relative to
-the current server root.
+This will read in the specified file(s) and set up the content handler
+object.  If the file is given with a relative path, it is understood to be
+relative to the current server root.  Files are read in the order they are
+listed.
+
+=head2 UttuDefine
+
+ UttuDefine variable value
+
+This will set the particular variable to have the specified value for use
+in the configuration files.  This allows such things as general
+configuration files that change with a username, for example, that is
+defined in the httpd.conf file.
+
+Values are scalars.
+
+=head2 UttuDefineList
+
+  UttuDefineList variable value1 value2 ...
+
+This will set the particular variable to have the specified list of values
+for use in the configuration files.
+
+Multiple uses of UttuDefineList with the same variable name will merge values.
+
+=head2 UttuDefineMap
+
+  UttuDefineMap variable key value
+
+This will set the particular variable to have the specified mapping of keys
+and values for use in the configuration files.
+
+Multiple uses of UttuDefineMap with the same variable name will merge values.
 
 =head1 CONFIGURATION
 
@@ -60,15 +91,24 @@ before handing off to the content handler.  Some of these configuration
 variables may be used by function sets as defaults, for example, the
 database connection parameters.
 
+Specifying the [global] section is optional (though may be required if
+using sections in the configuration file).  If not using a [global]
+section, prepend <global_> to the variable names listed here, as has been
+done when referencing them as variables for substitutions (e.g.,
+C<$global_content_handler>).
+
 =over 4
 
 =item content_handler
 
 This is the content handler to use when processing pages.  For example,
 C<mason> is included with the standard Uttu distribution and creates an
-C<HTML::Mason::ApacheHandler> object to handle pages.  See
-L<Uttu::Handler::mason> for more information on the Mason handler.  See
-L<Uttu::Handler> for what a content handler should provide.
+C<HTML::Mason::ApacheHandler> object to handle pages. See L<Uttu::Handler>
+for what a content handler should provide.
+
+Uttu comes with support for HTML::Mason (C<mason>) and the Template Toolkit
+(C<template>).  See the documentation for
+C<Uttu::Handler::$global_content_handler> for configuration information.
 
 =item db_database, db_const_database
 
@@ -92,7 +132,8 @@ database will not be modified.
 
 =item db_driver, db_const_driver
 
-This is the DBI driver to use.  C<DBD::$db_driver> must be loadable.
+This is the DBI driver to use.  C<DBD::$global_db_driver> (and
+C<DBD::$global_db_const_driver>) must be loadable.
 
 The default is C<undef>ined.
 
@@ -128,21 +169,38 @@ The default is C<undef>ined.
 
 C<db_const_username> defines the username for read-only access.
 
-=item db_uri_map_select_comp
+=item db_uri_map_table
 
-This is the SQL statement for selecting the component that corresponds to a
-uri.  Only one component should match.  There should only be one place
-holder (C<?>) which is where the uri will be inserted.
+This is the table in which the uri-to-filename mapping resides.
 
-The default is C<SELECT file FROM functions WHERE uri=?>.
+The default value is `functions'.
 
-=item db_uri_map_select_uri
+=item db_uri_map_field_file
 
-This is the SQL statement for selecting a uri that corresponds to a
-component.  Multiple uris may match.  There should only be one place holder
-(C<?>) which is where the component name will be inserted.
+This is the name of the field containing the component (or file) name.
 
-The default is C<SELECT uri FROM functions WHERE file=?>.
+The default value is `file'.
+
+=item db_uri_map_field_uri
+
+This is the name of the field containing the uri relative to the site root
+(the <Location> directive, for example).
+
+The default value is `uri'.
+
+=item db_uri_map_where
+
+  db_uri_map_where +{ uid => $u->note("uid") }
+
+This should be a snippet of code returning a hash or array reference
+defining additional terms for the where clause used in selecting entries
+from the uri-to-filename mapping.  C<$u> is provided and is a reference to
+the current Uttu object.
+
+See L<DBIx::Abstract> for how to construct a where clause as a hash or
+array reference.
+
+The default is C<undef>ined.
 
 =item framework
 
@@ -150,14 +208,12 @@ This is the framework to use.  This is not a required variable, but it can
 be useful to know during configuration which framework is being used.
 
 The value is valid if and only if the module
-C<Uttu::Framework::$global_framework> is loadable and the C<init> function
+C<Uttu::Framework::$global_framework> is loadable and its C<init> function
 returns a true value.
 
-This is one way function sets can know how to interact with the framework,
-or if they can work with it at all.
-
-Be aware that function sets that share the same name but require different
-frameworks will not be able to run on the same server.
+A framework can set certain default values for configuration variables.
+For example, the C<Uttu::Framework::Uttu> framework sets the
+C<content_handler> to C<mason>.
 
 =item function_set_base
 
@@ -167,12 +223,27 @@ the directory under those directories in which the web pages for function
 sets are installed.  If multiple root directories are configured, then this
 is appended to all of them when looking for a page in a function set.
 
-The default is C<sets>.
+The default is C<sets>.  Be careful changing this.
+L<Uttu::MakeMaker|Uttu::MakeMaker> expects this to be C<sets> (for now).
 
 =item handle
 
 This is a list of file extensions that Uttu should handle.  Otherwise, it
-will decline to rewrite the URL to point to the component.
+will decline to rewrite the URL to point to the component (but see L</translate_uri>).
+
+=item hostname
+
+This is the hostname of the server.  This is useful if the virtual server
+answers on several hostnames but the configuration is only stored with one
+of them.  Use this if there are problems with some hostnames but not others
+and they are all configured with one virtual server directive.
+
+=item index
+
+This is the name of the directory index.  This is added to the end of the
+URI if the URI is for a directory (ends in a slash - C</>).
+
+Default is C<index.html>.
 
 =item internationalization
 
@@ -187,6 +258,12 @@ See L<Uttu::L10N> for more information on internationalization.
 
 The default is false.
 
+=item lib
+
+This is an additional directory to add to C<@INC> when looking for Perl
+modules, especially during configuration.  These directories are also added
+to C<@INC> for each request.
+
 =item map_uri
 
 This is a mapping or URIs to filenames that overrides the database.  This
@@ -200,15 +277,23 @@ The format is as follows:
 
  map_uri /some/uri = /some/file
 
-Only URIs that are in the mapping will be visible to the client.  A special
-case is if a path at the beginning of a URI is mapped to a file.  This
-allows the use of C<dhandler>s.
+Only URIs that are in the mapping will be visible to the client.  See the
+content handler documentation for exceptions (such as C<dhandlers> and
+L<Uttu::Handler::mason|Uttu::Handler::mason>).
 
-=item lib
+=item port
 
-This is an additional directory to add to C<@INC> when looking for Perl
-modules, especially during configuration.  These directories are also added
-to C<@INC> for each request.
+This sets the port at which the virtual server is listening.  This does not
+affect Apache, but informs Uttu of which port it should expect the
+connection to appear to be on.  Use this if the port at request time is
+different than that set in the virtual host configuration directive.
+
+=item translate_uri
+
+This is a list of file extensions that Uttu should not handle yet map the
+uri to a filename.  Uttu will handle uri-to-filename translation but not
+set the content handler.  This is useful for graphic images that are
+distributed with a framework or function set.
 
 =item uri_mapping
 
@@ -271,9 +356,18 @@ the C<Uttu> package.
 This will clear the list of components associated with C<$key>.  This will
 only be for the current request.
 
-=item file_to_uri
+=item comp_to_rel_uri
 
- <a href="<% $u->file_to_uri($comp) %>">Link Text</a>
+ <a href="<% $u -> comp_to_rel_uri($comp) %>">Link Text</a>
+
+This will translate the filename to the URI corresponding to that file.  The URI that matches the current URI closest will be
+returned if more than one URI matches the file.  C<$function_set_base> should already be removed from the filename.
+
+This is just like C<comp_to_uri> except the returned URI is relative to the current URI.
+
+=item comp_to_uri
+
+ <a href="<% $u->comp_to_uri($comp) %>">Link Text</a>
 
 This will translate the filename to the URI corresponding to that file.
 The URI that matches the current URI closest will be returned if more than
@@ -288,13 +382,24 @@ This method returns the current C<AppConfig> object.
 or
   my $c = $u -> config;
 
+=item define
+
+This defines configuration variables.  If no configuration file is being
+read, then these are cached for later use.  Otherwise, they are added only
+to the configuration currently being read. 
+
+The arguments are almost identical to the C<define> function in
+L<AppConfig|AppConfig>.  C<Uttu-E<gt>define> expects an even number of
+arguments (basically a hash).
+
 =item query_cache
 
   $cache = $u -> query_cache($config_prefix);
 
 This will return a Cache::Cache object configured by the configuration file.
 
-The call C<$u -E<gt> query_cache("global_uri_map")>, for example will use the following configuration items.
+The call C<$u -E<gt> query_cache("global_uri_map")>, for example will use
+the following configuration items.
 
  [global]
    uri_map_namespace            (string)
@@ -309,7 +414,7 @@ It will return C<undef> if it can not create the cache.
 
   $dbh = $u -> query_dbh($config_prefix, %options);
 
-This will return a database handle (result of a C<DBI-E<gt>connect> call)
+This will return a database handle (result of a C<DBIx::Abstract-E<gt>connect> call)
 for the connection configured in the configuration file.
 
 The call C<$u -E<gt> query_dbh("global_db")>, for example will first look for the following configuration items.
@@ -330,11 +435,6 @@ For those of these that it can't find, it will look for the following.
     db_password  (string)
     db_option    (hash)
 
-Currently, only the C<Write> option is supported.  If this option is true,
-then the C<_const> part of the prefix will not be considered.  This is
-useful for specifying a database for reading and another for writing, with
-round robin access to either as desired.
-
 This function expects the C<*_database_*> variable to be a list of suitable
 strings.  If the string last used to make a connection does not return a
 valid database handle, then it will go through the rest of the list in
@@ -345,15 +445,23 @@ It will return C<undef> if it can not establish a connection.
 
 This function leaves caching of database connections to L<Apache::DBI|Apache::DBI>.
 
-=item define
+The following options are available:
 
-This defines configuration variables.  If no configuration file is being
-read, then these are cached for later use.  Otherwise, they are added only
-to the configuration currently being read. 
+=over 4
 
-The arguments are almost identical to the C<define> function in
-L<AppConfig|AppConfig>.  C<Uttu-E<gt>define> expects an even number of
-arguments (basically a hash).
+=item NoDefault
+
+If this option is true, then the "global_db_*" configuration settings are
+not used if the equivalent settings for the requested database coniguration
+cannot be found.
+
+=item Write
+
+If this option is true, then the C<_const> part of the prefix will not be
+considered.  This is useful for specifying a database for reading and
+another for writing, with round robin access to either as desired.
+
+=back
 
 =item note
 
@@ -392,9 +500,9 @@ Calling C<register_component> during server startup will register the
 component for all requests.  Otherwise, it will be removed from the list at
 the end of the current request.
 
-=item uri_to_file
+=item uri_to_comp
 
- $component = $u -> uri_to_file($uri);
+ $component = $u -> uri_to_comp($uri);
 
 This will return the file the given URI maps to.  This does not take
 into consideration internationalization.
@@ -463,8 +571,10 @@ file resides until after Uttu has done the uri-to-filename conversion.
 =head1 SEE ALSO
 
 L<AppConfig>,
+L<DBIx::Abstract>,
 L<Locale::Maketext>,
-L<Uttu::Manual>.
+L<Uttu::Manual>,
+L<Uttu.TAMU.Edu website|http://uttu.tamu.edu/>.
 
 =head1 WHY UTTU?
 
@@ -483,4 +593,4 @@ Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
-$Id: Uttu.pod,v 1.5 2002/03/20 17:53:30 jgsmith Exp $
+$Id: Uttu.pod,v 1.7 2002/04/15 22:26:53 jgsmith Exp $

@@ -36,6 +36,8 @@ Recipes for Uttu usage.
 
 Looking at the guts of Uttu.
 
+=back
+
 
 =head1 MODULE LISTING
 
@@ -73,6 +75,8 @@ Looking at the guts of Uttu.
 =over 4
 
 =item L<Uttu::Handler::mason|Uttu::Handler::mason>
+
+=item L<Uttu::Handler::template|Uttu::Handler::template>
 
 =back
 

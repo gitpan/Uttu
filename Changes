@@ -1,0 +1,78 @@
+NAME
+    Uttu::Changes - Change Log
+
+DESCRIPTION
+    This document lists the changes to Uttu introduced with each release.
+    This list should not be considered exhaustive. Major bug fixes and API
+    changes should be here.
+
+VERSION 0.02
+  New Features
+
+    DBIx::Abstract
+        Instead of using DBI directly, we now use DBIx::Abstract. Allows us
+        more configurability. As a result, code can be specified in the
+        configuration that produces a WHERE clause for use in mapping uris
+        to filenames (and filenames to uris). If a WHERE statement is
+        created, it is used as part of the key for cacheing.
+
+    Apache Configuration Directives
+        Added "UttuDefine", "UttuDefineList", "UttuDefineMap" to allow
+        partial configuration in the Apache configuration files. Allowed
+        "UttuConf" to accept multiple file names.
+
+    mod_perl 2.0
+        Added detection of mod_perl 2.0 (or 1.99 for beta 2.0 releases). For
+        now, Uttu will issue a warning, but this will be used in the future
+        for mod_perl 2.0 compatability.
+
+    Command line use
+        Uttu should be usable from a command-line program (Apache not
+        required). This is handy for using the session, authentication, or
+        authorization code in a framework. Allows the command-line program
+        to use the same Uttu configuration file as the Apache server.
+
+    [global] configuration variables
+        Added "db_uri_map_table", "db_uri_map_field_file",
+        "db_uri_map_field_uri", "db_uri_map_where", "hostname", "index",
+        "port", "translate_uri".
+
+        Removed "db_uri_map_select_comp", "db_uri_map_select_uri",
+        "fallback_language".
+
+    Uttu methods
+        Added "comp_to_rel_uri".
+
+    Framework methods
+        Added "init_config".
+
+    Support for Template Toolkit
+        Initial support added for using TT2 templates instead of HTML::Mason
+        components (see the Uttu::Handler::template manpage).
+
+    MakeMaker support for function sets
+        Uttu::MakeMaker should be able to build and install function sets in
+        addition to frameworks.
+
+  Bug Fixes
+
+    Uttu::MakeMaker support for function sets
+        Uttu::MakeMaker should be able to install function sets.
+
+        Uttu::MakeMaker does not yet support installation of uri-to-filename
+        mappings.
+
+VERSION 0.01
+    Released 20 Mar 2002.
+
+    This is the initial release of Uttu.
+
+AUTHOR
+    James Smith <jgsmith@cpan.org>
+
+COPYRIGHT
+    Copyright (C) 2002 Texas A&M University. All Rights Reserved.
+
+    This module is free software; you can redistribute it and/or modify it
+    under the same terms as Perl itself.
+

@@ -1,7 +1,5 @@
 package Uttu;
 
-# $Id: Uttu.pm,v 1.7 2002/03/20 17:53:29 jgsmith Exp $
-
 # AUTHOR
 # 
 # James G. Smith <jsmith@cpan.org>
@@ -19,32 +17,56 @@ package Uttu;
 #
 
 use lib qw: /usr/local/apache/perl/module-require/lib :;
-use Apache;
-use Apache::Constants           qw- :common DECLINE_CMD -;
-use Apache::ModuleConfig;
+
+BEGIN {
+  # for server restarts...  can't figure out how else to keep the package in Perl
+  # let's experiment a bit, and hope we get better Apache::Status behavior
+  delete @INC{grep m{Uttu/}, keys %INC};
+}
+
 use AppConfig                   qw- :argcount :expand -;
+use Apache::Constants           qw- :common DECLINE_CMD -;
 use Cache::SizeAwareMemoryCache ();
 use Carp;
+use Digest::MD5                 ();
 use DynaLoader                  ();
 use File::Glob                  qw: bsd_glob :;
-use Uttu::Tools qw: define_cache define_db :;
+use File::Spec                  ();
+use File::Spec::Unix            ();
+use Uttu::Tools qw: define_cache define_db server_root_relative :;
 use Uttu::Config;
 use strict;
 use warnings;
 
-use vars qw: $VERSION %variables %configs :;
+use vars qw: $VERSION $REVISION %variables %configs @ISA :;
 
-$VERSION = "0.01";
+$VERSION = "0.02";
+
+$REVISION = sprintf("%d.%d", q$Id: Uttu.pm,v 1.9 2002/04/15 22:26:52 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 my $self_for_config;
 my $config_for_define;
+my $self_global;
+
+# we want to be usable outside the mod_perl environment
+BEGIN {
+  if($ENV{MOD_PERL}) {
+    no strict;
+
+    require Apache;
+    require Apache::ModuleConfig;
+
+    eval { require mod_perl; };
+    if ($mod_perl::VERSION >= 1.99) {
+      warn "Uttu has not been tested with mod_perl 2.0 (or beta versions thereof)\n";
+    }     
+
+    require Apache::DBI;
+    Apache::DBI -> import();
+  }
+}
 
 if($ENV{MOD_PERL}) {
-  no strict;
-
-  require Apache::DBI;
-  Apache::DBI -> import();
-
   local(@ISA) = (@ISA, qw(DynaLoader));
   __PACKAGE__ -> bootstrap($VERSION);
 }
@@ -52,9 +74,7 @@ if($ENV{MOD_PERL}) {
 require DBI;
 DBI -> import();
 
-# for server restarts...  can't figure out how else to keep the package in Perl
-# let's experiment a bit, and hope we get better Apache::Status behavior
-delete @INC{grep m{Uttu/}, keys %INC};
+require DBIx::Abstract;
 
 sub retrieve {
     my $class = shift;
@@ -63,41 +83,38 @@ sub retrieve {
     my $r;
     my $self;
     if($r = Apache -> request) {
-	$self = Apache::ModuleConfig -> get($r, $class);
-	unless($self) { # try and look it up in %configs
-	    my $sconfig = Apache::ModuleConfig->get($r -> server, __PACKAGE__);
+        $self = Apache::ModuleConfig -> get($r, $class);
+        unless($self) { # try and look it up in %configs
+            my $sconfig = Apache::ModuleConfig->get($r -> server, __PACKAGE__);
             my $server = $r -> get_server_name;
             my $port   = $r -> get_server_port;
-	    my $cs = $configs{"$server:$port"};
+            my $cs = $configs{"$server:$port"};
             if(defined $cs) {
                 my $uri = $r -> uri;
                 my $luri = length($uri);
                 my @roots = sort { length($a) <=> length($b) } grep { length($_) <= $luri && $uri =~ m{^$_} } keys %$cs;
-		return unless @roots;
+                return unless @roots;
                 # if an Alias(Match)? or SetHandler config is between the root and the uri, we need to return undef
-		my @a = grep {$roots[0] =~ /^$_/} (@{$sconfig -> {_alias}},
-						   @{$sconfig -> {_aliasmatch}},
-						   @{$sconfig -> {_sethandler}});
-		#my @as= grep {$roots[0] =~ /^$_/} @{$sconfig -> {_aliasmatch}};
-		#my @sh= grep {$roots[0] =~ /^$_/} @{$sconfig -> {_sethandler}};
-		return if grep {length($_) <= $luri && $uri =~ /^$_/} @a; #(@a, @as, @sh);
+                my @a = grep {$roots[0] =~ /^$_/} (@{$sconfig -> {_alias}},
+                                                   @{$sconfig -> {_aliasmatch}},
+                                                   @{$sconfig -> {_sethandler}});
+                return if grep {length($_) <= $luri && $uri =~ /^$_/} @a; #(@a, @as, @sh);
                 $self = $cs->{$roots[0]} if @roots;
 
             }
-	}
+        }
     } elsif($self_for_config) {
-	$self = $self_for_config;
-    }
+        $self = $self_for_config;
+    } elsif($self_global) {
+        $self = $self_global;
+    }   
     return $self;
 }
 
-sub new {
-    my $self = shift;
-    my $class = ref $self || $self;
-
-    carp "Using " . __PACKAGE__ . " -> new()";
-
-    return bless { } => $class;
+sub make_default {
+  my $self = shift;
+  return unless ref $self;
+  return ( ($self_global, $self_global = $self)[0] );
 }
 
 # used for config file stuff
@@ -119,7 +136,7 @@ sub define {
 
 sub _set_from_file {
     my($self, $variable, $value) = @_;
-    my $file = Apache -> server_root_relative($value);
+    my $file = server_root_relative($value);
     local(*FH);
     open FH, "< $file" or warn "Unable to read $file\n";
     my $p = <FH>;
@@ -152,19 +169,38 @@ sub _validate_framework {
 
       return unless $ret;
       return if $@;
+
+      eval { $ret = $framework -> init_config($config_for_define); };
+
+      return unless $ret;
+      return if $@;
     }
     push @INC,  "$Uttu::Config::PREFIX/framework/$value/lib";
+    return 1;
+}
+
+sub _compile_where {
+    my($self, $variable, $value) = @_;
+    return 1 unless UNIVERSAL::isa($value, 'CODE');
+    $self -> set($variable, eval "sub { my \$u = shift; $value; };");
     return 1;
 }
 
 sub _validate_lib {
     my($variable, $value) = @_;
 
-    my $l = Apache -> server_root_relative($value);
+    my $l = server_root_relative($value);
     return unless -d $l;
 
     push @INC, $l;
     return 1;
+}
+
+sub _validate_where {
+    my($variable, $value) = @_;
+
+    eval "sub { my \$u = shift; $value; };";
+    return 1 unless $@;
 }
 
 sub _init_content_handler {
@@ -194,7 +230,7 @@ sub _include_file {
         local($Uttu::Config::max_include_depth);
 
         $Uttu::Config::curr_include_depth++;
-        $self -> file(Apache -> server_root_relative($value));
+        $self -> file(server_root_relative($value));
         $Uttu::Config::curr_include_depth--;
     }
     $self -> set("global_max_include_depth", $Uttu::Config::max_include_depth);
@@ -208,17 +244,20 @@ sub _set_include_depth {
     
 
 Uttu -> define(
-    global_fallback_language => {
-        ARGCOUNT => ARGCOUNT_LIST,
-        DEFAULT => 'en',
-    },
     define_db("global_db"),
     define_cache("global_uri_map"),
-    global_db_uri_map_select_comp => {
-        DEFAULT => "SELECT file FROM functions WHERE uri=?",
+    global_db_uri_map_field_uri => {
+        DEFAULT => 'uri',
     },
-    global_db_uri_map_select_uri => {
-        DEFAULT => "SELECT uri FROM functions WHERE file=?",
+    global_db_uri_map_field_file => {
+        DEFAULT => 'file',
+    },
+    global_db_uri_map_table => {
+        DEFAULT => 'functions',
+    },
+    global_db_uri_map_where => {
+        VALIDATE => \&_validate_where,
+        ACTION => \&_compile_where,
     },
     global_internationalization => {
         ARGCOUNT => ARGCOUNT_NONE,
@@ -228,19 +267,30 @@ Uttu -> define(
     global_function_set_base => {
         DEFAULT => "sets",
     },
+    global_index => {
+        ARGCOUNT => ARGCOUNT_ONE,
+        DEFAULT => 'index.html',
+    },
     global_handle => {
-	ARGCOUNT => ARGCOUNT_LIST,
-	DEFAULT => '.html',
+        ARGCOUNT => ARGCOUNT_LIST,
+        DEFAULT => '.html',
+    },
+    global_translate_uri => {
+        ARGCOUNT => ARGCOUNT_LIST,
     },
     global_map_uri => {
         ARGCOUNT => ARGCOUNT_HASH,
     },
     global_lib => {
         ARGCOUNT => ARGCOUNT_LIST,
-	VALIDATE => \&_validate_lib,
+        VALIDATE => \&_validate_lib,
     },
     global_internationalization => {
         ARGCOUNT => ARGCOUNT_NONE,
+    },
+    global_server_root => {
+        ARGCOUNT => ARGCOUNT_ONE,
+        DEFAULT => File::Spec->rootdir(),
     },
     global_uri_mapping => {
         ARGCOUNT => ARGCOUNT_NONE,
@@ -252,10 +302,10 @@ Uttu -> define(
         VALIDATE => \&_init_content_handler,
     },
     global_port => {
-	VALIDATE => q"^\d+$",
+        VALIDATE => q"^\d+$",
     },
     global_hostname => {
-	ARGCOUNT => ARGCOUNT_LIST,
+        ARGCOUNT => ARGCOUNT_LIST,
     },
     # the following is experimental (i.e., for development) only
     global_include => {
@@ -278,11 +328,6 @@ Uttu -> define(
 ### public methods
 ###
 
-sub config {
-  return $config_for_define if $config_for_define and not ref $_[0];
-  return $_[0] -> retrieve -> {config} unless ref $_[0];
-  return $_[0] -> {config};
-}
 
 sub lh {
   return $_[0] -> retrieve -> {lh} unless ref $_[0];
@@ -326,13 +371,97 @@ sub query_components {
       $h =  $self -> {components} -> {$key} || {};
   }
   return[ sort { $h->{$a} <=> $h->{$b} }
-	      keys %{$h} 
-	];
+              keys %{$h} 
+        ];
 }
 
-#
-# back to the public methods
-#
+## __where and __where_hash are taken from DBIx::Abstract
+
+sub _key_from_where {
+  my($self, $where) = @_;
+
+  my $key = $self -> __where($where);
+
+  return Digest::MD5::md5_hex($key);
+}
+
+sub __where {
+  my($self,$where,$int) = @_;
+  my $result='';
+  my @bind_params;
+  $int ||= 0;
+
+  die "Uttu WHERE parser iterated too deep, circular reference in where clause?\n"
+    if $int > 20;
+
+  if (UNIVERSAL::isa($where, 'ARRAY')) {
+    foreach (@$where) {
+      if (ref($_) eq 'HASH') {
+        my($moreres,@morebind) = $self->__where_hash($_);
+        $result .= "($moreres)" if $moreres;
+        push(@bind_params,@morebind);
+      } elsif (ref($_) eq 'ARRAY') {
+        my($moreres,@morebind) = $self->__where($_,$int+1);
+        $result .= "($moreres)" if $moreres;
+        push(@bind_params,@morebind);
+      } else {
+        $result .= " $_ ";
+      }
+    }
+  } elsif (UNIVERSAL::isa($where, 'HASH')) {
+    my($moreres,@morebind) = $self->__where_hash($where);
+    $result = $moreres;
+    @bind_params = @morebind;
+  } else {
+    $result = $where;
+  }
+  if ($result) {
+    if($int) {
+      return $result, @bind_params;
+    }
+    return join($;, $result,@bind_params);
+  } else {
+    return '';
+  }
+}
+
+sub __where_hash {
+  my($self,$where) = @_;
+  my $ret;
+  my @bind_params;
+
+  foreach (keys(%$where)) {
+    if ($ret) { $ret .= ' AND ' }
+    $ret .= "$_ ";
+    if (ref($$where{$_}) eq 'ARRAY') {
+      $ret .= $$where{$_}[0].' ';
+      if (ref($$where{$_}[1]) eq 'SCALAR') {
+        $ret .= ${$$where{$_}[1]};
+      } else {
+        $ret .= '?';
+        push(@bind_params,$$where{$_}[1]);
+      }
+    } else {
+      if (defined($$where{$_})) {
+        $ret .= '=';
+        if (ref($$where{$_}) eq 'SCALAR') {
+          $ret .= ${$$where{$_}};
+        } else {
+          $ret .= '?';
+          push(@bind_params,$$where{$_});
+        }
+      } else {
+        $ret .= 'IS NULL';
+      }
+    }
+  }
+  if ($ret ne '()') {
+    return $ret,@bind_params;
+  } else {
+    return '';
+  }
+}
+
 
 sub _uri_to_comp {
   my($self, $c, $dbh, $uri) = @_;
@@ -341,23 +470,43 @@ sub _uri_to_comp {
   return unless $cache;
 
   my $ret;
-  unless(defined($ret = $cache->get($uri))) {
+  my $key;
+  my $where = $c -> global_db_uri_map_where || sub { };
+  $where = $where -> ($self);
+
+  if(defined $where and 
+        (UNIVERSAL::isa($where, 'HASH') || 
+         UNIVERSAL::isa($where, 'ARRAY'))) 
+    {
+    $where = [ {
+      $c -> global_db_uri_map_field_uri => $uri,
+    }, 'AND', $where ];
+    $key = $self -> _key_from_where($where);
+  } else {
+    $where = {
+      $c -> global_db_uri_map_field_uri => $uri,
+    };
+    $key = $uri;
+  }
+
+  unless(defined($ret = $cache->get($key))) {
     unless($ret = $c -> global_map_uri  -> {$uri}) {
       if($dbh and not $ret) {
         # look for it in the sitemap
         eval {
-            # do we need to escape such things as `%' ?
-            my $sth = $dbh -> prepare_cached($c -> global_db_uri_map_select_comp);
-            $sth -> execute($uri) 
-                or die;
- 
-	    my $info = $sth -> fetchrow_arrayref;
-            $ret = $info->[0] if $info;
-	    $sth -> finish;
+          my @info = $dbh -> select_one_to_array({
+            fields => [ $c -> global_db_uri_map_field_file ],
+            table  => [ $c -> global_db_uri_map_table ],
+            where  => $where,
+          });
+          if(@info) {
+            # we want to modify $key to reflect the $where
+            $ret = $info[0] if @info;
+          }
         };
       }
     }
-    $cache->set($uri, $ret || "");
+    $cache->set($key, $ret || "");
   }
   return $ret;
 }
@@ -377,8 +526,8 @@ sub uri_to_comp {
       $path_info = join("/", @bits);
       while(@bits) {
         $u .= "/" . shift @bits;
-	my $f = $self -> _uri_to_comp($c, $dbh, $u);
-	if($f) {
+        my $f = $self -> _uri_to_comp($c, $dbh, $u);
+        if($f) {
             $function = $f;
             $path_info = join("/", @bits);
         }
@@ -428,20 +577,45 @@ sub comp_to_uri {
     $comp_mapping = $self -> {comp_mapping};
   }
 
+  my $key;
+  my $where = $c -> global_db_uri_map_where || sub { };
+  $where = $where -> ($self);
+
+  if(defined $where and
+        (UNIVERSAL::isa($where, 'HASH') ||
+         UNIVERSAL::isa($where, 'ARRAY')))
+    {
+    $where = [ {
+      $c -> global_db_uri_map_field_file => $comp,
+    }, 'AND', $where ];
+    $key = $self -> _key_from_where($where);
+  } else {
+    $where = {
+      $c -> global_db_uri_map_field_file => $comp,
+    };
+    $key = $comp;
+  }
+
+  my $dbh = $self -> query_dbh("global_db")
+    or carp qq:Unable to connect to database:;
+
+
   unless(exists $comp_mapping -> {$comp}) {
     eval {
-      my $dbh = $self -> query_dbh("global_db")
-        or croak qq:Unable to connect to database:;
-      my $sth = $dbh -> prepare_cached($c -> global_db_uri_map_select_uri);
-      $sth -> execute($comp)
-            or croak qq:Unable to find $comp:;
-
-      my $info;
-      while($info = $sth -> fetchrow_arrayref) {
-	  push @{$comp_mapping -> {$comp} ||= []}, $info->[0];
+      $dbh -> select({
+        fields => [ $c -> global_db_uri_map_field_uri ],
+        table  => [ $c -> global_db_uri_map_table ],
+        where  => $where,
+      });
+      if($dbh -> rows) {
+        my $info;
+        while($info = $dbh -> fetchrow_arrayref) {
+          push @{$comp_mapping -> {$comp} ||= []}, $info->[0];
+        }
+        $dbh -> finish;
       }
-      $sth -> finish;
     };
+    warn "$@\n" if $@;
   }
 
   my @uris = @{$comp_mapping -> {$comp} || []};
@@ -465,6 +639,19 @@ sub comp_to_uri {
 
   return $base . $uris[$i-1] if _score($uris[$i-1], $m) > _score($uris[$i+1], $m);
   return $base . $uris[$i+1];
+}
+
+sub comp_to_rel_uri {
+  my($self, $comp) = @_;
+
+  my $r = Apache -> request;
+
+  my $uri = $self -> comp_to_uri($comp);
+
+  my $loc = $r -> uri;
+  $loc =~ s{/[^/]+$}{};
+
+  return File::Spec::Unix->abs2rel($uri, $loc);
 }
 
 sub note {
@@ -502,14 +689,22 @@ sub query_dbh {
   # database definitions (not username/password or driver, just database)
 
   my $suffix = "";
+  my $use_db_global_as_default = 1;
   $suffix = "_const" unless $options{'Write'};
+  $use_db_global_as_default = 0 if $options{'NoDefault'};
+
   unless($self -> {_dbh_cache}->{"$prefix:$suffix"}) {
     $self -> {_dbh_cache}->{"$prefix:$suffix"} = {
-      driver => $self->_query_const_dbh_var($prefix, "_driver", $suffix),
-      database => $self->_query_const_dbh_var($prefix, "_database", $suffix),
-      username => $self->_query_const_dbh_var($prefix, "_username", $suffix),
-      password => $self->_query_const_dbh_var($prefix, "_password", $suffix),
-      options  => $self->_query_const_dbh_var($prefix, "_option", $suffix),
+      driver => ($self->_query_const_dbh_var($prefix, "_driver", $suffix) ||
+                ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_driver", $suffix) : undef )),
+      database => ($self->_query_const_dbh_var($prefix, "_database", $suffix) ||
+                ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_database", $suffix) : undef )),
+      username => ($self->_query_const_dbh_var($prefix, "_username", $suffix) ||
+                ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_username", $suffix) : undef )),
+      password => ($self->_query_const_dbh_var($prefix, "_password", $suffix) ||
+                ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_password", $suffix) : undef )),
+      options  => ($self->_query_const_dbh_var($prefix, "_option", $suffix) ||
+                ($use_db_global_as_default ? $self->_query_const_dbh_var("global_db", "_option", $suffix) : undef )),
     };
     $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {options} -> {PrintError} ||= 0;
     $self -> {_dbh_cache}->{"$prefix:$suffix"} -> {database} = 
@@ -518,25 +713,41 @@ sub query_dbh {
   }
 
 
-  return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"}
-      if $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
+  eval {
+    $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} -> ensure_connection();
+    return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
+  } if $self -> {_query_dbh_cache} -> {"$prefix:$suffix"};
 
   my $info = $self -> {_dbh_cache}->{"$prefix:$suffix"};
   my $current = $info -> {database} -> [0];
-  my $dbh = DBI -> connect("dbi:" . $info->{driver} . ":$current", 
-			   $info->{username}, $info->{password},
-			   { %{$info -> {options} || {}} });
+  my $dbh = DBIx::Abstract -> connect({
+      dsn => "dbi:" . $info->{driver} . ":$current", 
+      user => $info->{username}, 
+      password => $info->{password},
+    },
+    { useCached => 1,
+      loglevel => 6,
+      logfile => "/tmp/uttu_sql_log",
+      %{$info -> {options} || {}
+    } }
+  );
   return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
 
   my $db = pop @{$info->{database}};
   unshift @{$info->{database}}, $db;
   while($db ne $current) {
-    $dbh = DBI -> connect("dbi:" . $info->{driver} . ":$db",
-			  $info->{username}, $info->{password},
-			  { %{$info -> {options} || {}} });
+    $dbh = DBIx::Abstract -> connect({
+        dsn => "dbi:" . $info->{driver} . ":$db", 
+        user => $info->{username}, 
+        password => $info->{password},
+      },
+      { useCached => 1,
+        %{$info -> {options} || {}
+      } }
+    );
+    
     return $self -> {_query_dbh_cache} -> {"$prefix:$suffix"} = $dbh if defined $dbh;
-    $db = pop @{$info->{database}};
-    unshift @{$info->{database}}, $db;
+    unshift @{$info->{database}}, ($db = pop @{$info->{database}});
   }
   return;
 }
@@ -552,9 +763,9 @@ sub query_cache {
       namespace => $c -> get($prefix."_namespace") || join(':', $c -> global_framework, $prefix),
       default_expires_in => $c -> get($prefix."_expiration") || "never",
       auto_purge_interval => $c -> get($prefix."_auto_purge_interval")
-			  || "never",
+                          || "never",
       max_size => $c -> get($prefix."_size_limit")
-	       || $Cache::SizeAwareCache::NO_MAX_SIZE,
+               || $Cache::SizeAwareCache::NO_MAX_SIZE,
     } );
 }
 
@@ -580,6 +791,9 @@ sub handler ($$) {
   my($class, $r) = @_;
 
   my $self = $class -> retrieve;
+  # we really only want to do this if global_uri_sessions is >0 and
+  # the length of the first part of the uri is the length of
+  # global_uri_sessions
   unless($self) {
     my $uri = $r -> uri;
     if($uri =~ m{^/([^/]+)(/.*)}) {
@@ -587,10 +801,10 @@ sub handler ($$) {
       $r -> uri($2);
       $self = $class -> retrieve;
       if($self && $self -> config -> global_uri_sessions) {
-	$self -> note("sessionid") = $sessionid;
+        $self -> note("sessionid") = $sessionid;
       } else {
-	$r -> uri("/$sessionid" . $r -> uri());
-	return DECLINED;
+        $r -> uri("/$sessionid" . $r -> uri());
+        return DECLINED;
       }
     }
   }
@@ -607,7 +821,7 @@ sub handler ($$) {
   my $uri = $r -> uri;
 
   if($c -> global_uri_mapping) {
-    $uri .= "index.html" if $uri =~ m{/$};
+    $uri .= $c -> global_index if $uri =~ m{/$};
     $uri =~ s{^$loc}{};
 
     $path_info = "";
@@ -629,10 +843,13 @@ sub handler ($$) {
     $path_info = $r -> path_info;
   }
 
-  if($self -> {global_handle}) {
-    my $ext;
+  my $ext;
+  if($self -> {global_handle} || $self -> {global_translate_uri}) {
     $ext = $1 if $uri =~ m{(\..*?)$};
-    return DECLINED unless exists $self -> {global_handle} -> {$ext};
+    return DECLINED unless exists $self -> {global_handle} -> {$ext} || 
+                           exists $self -> {global_translate_uri} -> {$ext};
+  } else {
+    return DECLINED;
   }
 
   # send on its way
@@ -640,9 +857,10 @@ sub handler ($$) {
   $r -> path_info($path_info);
   $r -> uri($loc . $uri);
 
-  $r -> handler("perl-script");
-  #$r -> push_handlers(PerlHandler => sub { $self -> content_handler($r) });
-  $r -> push_handlers(PerlHandler => \&content_handler);
+  if(exists $self -> {global_handle} -> {$ext}) {
+    $r -> handler("perl-script");
+    $r -> push_handlers(PerlHandler => \&content_handler);
+  }
   return OK;
 }
 
@@ -663,13 +881,13 @@ sub content_handler ($$) {
     $f =~ s{/.*$}{};
     my $module;
     foreach my $m (
-	"Uttu::Framework::$fr\::L10N::Local::$f", 
-	"Uttu::Framework::$fr\::L10N::$f", 
-	"Uttu::Framework::$fr\::L10N::Local", 
-	"Uttu::Framework::$fr\::L10N") {
-	    eval { require $m; };
-	    next if $@;
-	    $module = $m;
+        "Uttu::Framework::$fr\::L10N::Local::$f", 
+        "Uttu::Framework::$fr\::L10N::$f", 
+        "Uttu::Framework::$fr\::L10N::Local", 
+        "Uttu::Framework::$fr\::L10N") {
+            eval { require $m; };
+            next if $@;
+            $module = $m;
     }
     eval {
       $self -> {lh} = $module -> get_handle();
@@ -698,20 +916,31 @@ sub set_config {
     $self -> {config} = $c;
 }
 
-###
-### Apache Configuration Directives
-###
+# used to read in the config file
+sub config {
+  my $self = shift;
 
-sub UttuConf ($$$) {
-  my($cfg, $param, $file) = @_;
+  if(!@_) {
+    return $config_for_define if $config_for_define and not ref $self;
+    return $self -> retrieve -> {config} unless ref $self;
+    return $self -> {config};
+  }
+
+  my $class = ref $self || $self;
+
+  $self = bless { } => $class unless ref $self;
 
   local(@INC) = @INC;
 
-  $cfg -> {config_file} = $file;
+  my @files;
 
-  $file = Apache -> server_root_relative($file) unless $file =~ m{^/};
+  my $param = shift if $ENV{MOD_PERL};
 
-  $cfg -> {full_path_file} = $file;
+  $self -> {config_file} = [ @_ ];
+
+  @files = map { server_root_relative $_ } @_;
+
+  $self -> {full_path_file} = [ @files ];
 
   my $c = AppConfig -> new({
     GLOBAL => {
@@ -720,16 +949,33 @@ sub UttuConf ($$$) {
         EXPAND => EXPAND_ALL | EXPAND_WARN,
       },
   });
+  my @cfg_defines;
+
+  foreach my $k (keys %{$self -> {_defines} || {}}) {
+    push @cfg_defines, $k;
+    if(UNIVERSAL::isa($self -> {_defines}->{$k}, 'ARRAY')) {
+      push @cfg_defines, { ARGCOUNT => ARGCOUNT_LIST, EXPAND => EXPAND_ALL | EXPAND_WARN };
+    } elsif(UNIVERSAL::isa($self -> {_defines}->{$k}, 'HASH')) {
+      push @cfg_defines, { ARGCOUNT => ARGCOUNT_HASH, EXPAND => EXPAND_ALL | EXPAND_WARN };
+    } else {
+      push @cfg_defines, { ARGCOUNT => ARGCOUNT_ONE, EXPAND => EXPAND_ALL | EXPAND_WARN };
+    }
+  }
+
 
   eval {
-    $c -> define(%variables);
+    $c -> define(%variables, @cfg_defines);
     $config_for_define = $c;
-    $self_for_config = $cfg;
-    $c -> file($file);
+    $self_for_config = $self;
+    foreach my $k (keys %{$self -> {_defines} || {}}) {
+      $c -> set($k, $self -> {_defines}->{$k});
+    }
+    $c -> file(@files);
     $config_for_define = undef;
     $self_for_config = undef;
-    $cfg -> set_config($c);
+    $self -> set_config($c);
   };
+  warn "Errors reading configuration: $@\n" && die if $@;
   eval {
     push @INC, @{$c -> global_lib || []};
     $c = AppConfig -> new({
@@ -739,26 +985,30 @@ sub UttuConf ($$$) {
         EXPAND => EXPAND_ALL | EXPAND_WARN,
       },
     });
-    $c -> define(%variables);
+    $c -> define(%variables, @cfg_defines);
     $config_for_define = $c;
-    $self_for_config = $cfg;
-    $c -> file($file);
+    $self_for_config = $self;
+    foreach my $k (keys %{$self -> {_defines} || {}}) {
+      $c -> set($k, $self -> {_defines}->{$k});
+    }
+    $c -> file(@files);
     $config_for_define = undef;
     $self_for_config = undef;
-    $cfg -> set_config($c);
+    $self -> set_config($c);
   } if $@;
-  warn "Errors reading configuration from $file: $_[0]\n" && die if $@;
-
-  $c -> global_port($param -> server -> port || 80) unless $c -> global_port;
-  $c -> global_hostname($param -> server -> server_hostname) unless @{$c -> global_hostname || []};
+  warn "Errors reading configuration: $@\n" && die if $@;
 
   # cache these in convenient hash form
-  $cfg -> {global_handle} = { };
-  @{$cfg -> {global_handle}}{@{$c -> global_handle || []}} = ( );
+  $self -> {global_handle} = { };
+  @{$self -> {global_handle}}{@{$c -> global_handle || []}} = ( );
+  $self -> {global_translate_uri} = { };
+  @{$self -> {global_translate_uri}}{@{$c -> global_translate_uri || []}} = ( );
+
+  #warn Data::Dumper -> Dump([$c]) . "\n";
 
   my $handler_class = "Uttu::Handler::" . $c -> global_content_handler;
 
-  $cfg -> {handler} = $handler_class -> config($c, $param);
+  $self -> {handler} = $handler_class -> config($c, $param);
 
   if($c -> global_internationalization) {
     eval {
@@ -769,11 +1019,75 @@ sub UttuConf ($$$) {
     }
   }
 
+  $self -> {config} = $c;
+
+  $self -> make_default unless $self_global;
+
+  return $self;
+}
+
+###
+### Apache Configuration Directives
+###
+
+# we want to be able to list mutliple files on the command line
+sub UttuConf ($$$;*) {
+  my($cfg, $param, $file, $fh) = @_;
+
+  my @files;
+
+  # "..." or ...(no spaces)
+  @files = grep { defined $_ } ($file =~ m{"((?:\\"|[^"]+)*)"|([^"\s]+)}g);
+
+  my $c = $cfg -> config($param, @files) -> config;
+
+  $c -> global_port($param -> server -> port || 80) unless $c -> global_port;
+  $c -> global_hostname($param -> server -> server_hostname) unless @{$c -> global_hostname || []};
+
   my $p = $c->global_port;
   foreach my $h (@{$c -> global_hostname || []}) {
     $configs{"$h:$p"}->{$param->path()} = $cfg;
   }
   $cfg -> {location} = $param->path();
+}
+
+sub UttuDefine ($$$$) {
+  my($cfg, $param, $var, $val) = @_;
+
+  return unless ref $cfg;
+
+  if(ref $cfg->{_defines}->{$var}) {
+    warn "$var previously defined by UttuDefineList or UttuDefineMap.\n";
+    die;
+  }
+
+  $cfg->{_defines}->{$var} = $val;
+}
+
+sub UttuDefineList ($$@;@) {
+  my($cfg, $param, $var, $val) = @_;
+
+  return unless ref $cfg;
+
+  if(exists $cfg->{_defines}->{$var} && !UNIVERSAL::isa($cfg->{_defines}->{$var}, 'ARRAY')) {
+    warn "$var previously defined by UttuDefine or UttuDefineMap.\n";
+    die;
+  }
+
+  push @{$cfg -> {_defines} -> {$var} ||= []}, $val;
+}
+
+sub UttuDefineMap ($$$$$) {
+  my($cfg, $param, $var, $key, $val) = @_;
+
+  return unless ref $cfg;
+
+  if(exists $cfg->{_defines}->{$var} && !UNIVERSAL::isa($cfg->{_defines}->{$var}, 'HASH')) {
+    warn "$var previously defined by UttuDefine or UttuDefineList.\n";
+    die;
+  }
+
+  $cfg -> {_defines} -> {$var} -> {$key} = $val;
 }
 
 sub Alias ($$$$) {
@@ -807,6 +1121,7 @@ sub SERVER_CREATE {
   }
 
   $self{_uttu} = { };
+  $self{_defines} = { };
 
   return bless \%self => $class;
 }

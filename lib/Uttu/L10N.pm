@@ -1,8 +1,8 @@
 package Uttu::L10N;
 
-use vars qw{ @ISA $VERSION $has_locale_maketext };
+use vars qw{ @ISA $has_locale_maketext $REVISION };
 
-$VERSION = '0.01';
+$REVISION = sprintf("%d.%d", q$Id: L10N.pm,v 1.3 2002/04/15 22:27:00 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 eval {
   require Locale::Maketext;
@@ -39,6 +39,35 @@ __END__
 =head1 NAME
 
 Uttu::L10N - basic internationalization support
+
+=head1 DESCRIPTION
+
+Uttu has minimal support for internationalization.  The reason for this is
+that there are already good ways to handle language choice without
+rewritting it all in Perl again.
+
+Uttu lets Apache handle the choice of which file to serve after it has
+translated the URI to a filename.  This is subject to change since it
+doesn't handle well the case of HTML::Mason with different component roots
+where one component root has working files masking some of the files in a
+more general or production component root.
+
+Uttu uses L<Locale::Maketext|Locale::Maketext> as the basis for its
+language translation services.
+
+If internationalization is enabled, Uttu will search through several Perl
+modules, using the first one it finds.  These are, in order of preference
+and following the suggested C<@ISA> chain,
+
+ Uttu::Framework::$framework::L10N::Local::$function_set,
+ Uttu::Framework::$framework::L10N::$function_set,
+ Uttu::Framework::$framework::L10N::Local,
+ Uttu::Framework::$framework::L10N,
+ Uttu::L10N.
+
+=head1 SEE ALSO
+
+L<Locale::Maketext>
 
 =head1 AUTHOR
 

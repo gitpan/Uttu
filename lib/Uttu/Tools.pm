@@ -2,14 +2,15 @@ package Uttu::Tools;
 
 use Exporter;
 use AppConfig qw- :argcount -;
+use File::Spec;
 
-use vars qw: @EXPORT_OK $VERSION @ISA :;
+use vars qw: @EXPORT_OK @ISA $REVISION :;
 
-$VERSION = "0.01";
+$REVISION = sprintf("%d.%d", q$Id: Tools.pm,v 1.5 2002/04/15 22:27:01 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 @ISA = qw: Exporter :;
 
-@EXPORT_OK = qw: call_other define_db define_cache :;
+@EXPORT_OK = qw: call_other define_db define_cache server_root_relative :;
 
 sub call_other {
     my($class_regex, $method, @args) = @_;
@@ -28,9 +29,11 @@ sub call_other {
     }
 }
 
+sub server_root_relative($);
+
 sub _set_from_file {
     my($self, $variable, $value) = @_;
-    my $file = Apache -> server_root_relative($value);
+    my $file = server_root_relative($value);
     open my $fh, "<", $file or warn "Unable to read $file\n";
     my $p = <$fh>;
     close $fh;
@@ -59,9 +62,7 @@ sub define_db {
             ARGCOUNT => ARGCOUNT_HASH,
         },
         $prefix."_driver", {
-            VALIDATE => sub {
-                eval "require DBD::$_[1]";
-            },
+            VALIDATE => sub { eval "require DBD::$_[1]"; return !$@; },
         },
     
         $prefix."_const_database", {
@@ -78,9 +79,7 @@ sub define_db {
             ARGCOUNT => ARGCOUNT_HASH,
         },
         $prefix."_const_driver",  {
-            VALIDATE => sub {
-                eval "require DBD::$_[1]";
-            },
+            VALIDATE => sub { eval "require DBD::$_[1]"; return !$@; },
         },
     );
 }
@@ -125,6 +124,13 @@ sub define_cache {
 	    VALIDATE => sub { eval { require Cache::SizeAwareSharedMemoryCache }; return !$@; },
         },
     );
+}
+
+sub server_root_relative($) {
+  return Apache->server_root_relative(shift)
+    if $ENV{MOD_PERL};
+
+  return File::Spec -> rel2abs(shift, Uttu->retrieve->config->global_server_root || '');
 }
 
 1;

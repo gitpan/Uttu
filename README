@@ -1,5 +1,5 @@
                             ---------
-                            Uttu 0.01
+                            Uttu 0.02
                             ---------
 
 Uttu is a web interface driver that works with a framework and function
@@ -15,7 +15,6 @@ resulting directory.  There, run the following:
 
   % perl Makefile.PL [UTTU_PREFIX=...]
   % make
-  % make test (optional)
   % make install
 
 No non-trivial tests are provided at the moment.  Eventually, the
@@ -36,4 +35,4 @@ Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-$Id: README,v 1.1 2002/03/20 17:53:27 jgsmith Exp $
+$Id: README,v 1.2 2002/04/15 22:26:49 jgsmith Exp $
