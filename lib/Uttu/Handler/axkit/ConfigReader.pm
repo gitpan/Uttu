@@ -1,6 +1,9 @@
-package Uttu::Handlers::axkit::ConfigReader;
+package Uttu::Handler::axkit::ConfigReader;
 
-use base qw(Apache::AxKit::ConfigReader);
+use Apache::AxKit::ConfigReader;
+use Uttu::Handler::axkit::ContentProvider;
+
+our @ISA = qw(Apache::AxKit::ConfigReader);
 
 our %config_map = qw(
     StyleMap        axkit_map_style
@@ -31,11 +34,35 @@ our %config_map = qw(
 # axkit_map_style -> hash
 # axkit_xsp_taglib -> hash ?
 
+#sub new {
+#    my $class = shift;
+#    my  $self = $class -> SUPER::new(@_);
+#
+#    warn "new $self\n";
+#
+#    bless $self => __PACKAGE__;
+#}
+
+#*new = \&Apache::AxKit::ConfigReader::new;
+
 sub get_config {
     my($self) = shift;
     # we want to map between the AppConfig stuff and what AxKit expects
 
+#    warn "$self -> get_config\n";
+
     my $u = Uttu -> retrieve or return;
+
+    my $config;
+
+    if($u -> {handler} && defined($config = $u -> {handler} -> axkitconfig)) {
+        delete $config -> {apache};
+        @{$self}{keys %$config} = values %$config;
+        return $self;
+    }
+
+    #return $u -> {handler} -> axkitconfig
+    #    if $u -> {handler} && defined $u -> {handler} -> axkitconfig;
 
     my $c = $u -> config or return;
 
@@ -47,11 +74,14 @@ sub get_config {
 
     $cfg{NoCache} = !$c -> get('axkit_cache_dir'); # boolean
 
-    $cfg{ConfigProvider} ||= 'Uttu::Handlers::axkit::ContentProvider'
+    $cfg{ConfigProvider} ||= 'Uttu::Handler::axkit::ContentProvider'
         if $c -> get('axkit_secondary_handler');
+
+    $cfg{StyleProvider} ||= 'Apache::AxKit::Provider::File';
 
     while(my($s, $c) = each %{$cfg{StyleMap}||{}}) {
         eval "require $c";
+        warn "Unable to load $c: $@\n" if $@;
         delete $cfg{StyleMap}{$s} if $@;
     }
 
@@ -130,10 +160,12 @@ sub get_config {
 # Root mime/type href root_element
 # URI mime/type href uri
             
-            $directives{$style} = \@directive;
+            push @{$directives{$style}||=[]}, \@directive;
         }
-        $cfg{Processors} -> {$k} = \%directive if scalar keys %directives;
+        $cfg{Processors} -> {$k} = \%directives if scalar keys %directives;
     }
+
+    delete $cfg{apache};
 
     $self -> {cfg} = \%cfg;
 }

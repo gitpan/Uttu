@@ -5,7 +5,6 @@ Makefile.PL
 README
 lib/Uttu.pm
 lib/Uttu.pod
-lib/Uttu/Build.pm
 lib/Uttu/Changes.pod
 lib/Uttu/Framework.pm
 lib/Uttu/Handler.pod
@@ -20,9 +19,14 @@ lib/Uttu/Manual.pod
 lib/Uttu/Manual/Framework.pod
 lib/Uttu/Manual/FunctionSet.pod
 lib/Uttu/Manual/Intro.pod
+lib/Uttu/Resource.pm
+lib/Uttu/Resource/ldap.pm
+lib/Uttu/Resource/pool.pm
+lib/Uttu/Resource/resources.pm
 lib/Uttu/Test.pm
 lib/Uttu/Tools.pm
 t/00basic.t
+t/05resources.t
 t/10axkit.t
 t/10mason.t
 t/10tt2.t

@@ -3,13 +3,6 @@
   version="1.0"
 > 
 
-  <xsl:output
-    method="xhtml"
-    indent="yes"
-    doctype-public="-//W3C//DTD XHTML 1.0 Strict//EN"
-    doctype-system="DTD/xhtml1-strict.dtd"
-  />
-
   <xsl:template match="/">
     <xsl:apply-templates/>
   </xsl:template>

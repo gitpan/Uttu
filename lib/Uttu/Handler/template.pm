@@ -16,7 +16,7 @@ use warnings;
 
 use vars qw{ $REVISION $SERVICE_MODULE};
 
-$REVISION = sprintf("%d.%d", q$Id: template.pm,v 1.5 2002/08/06 19:21:51 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: template.pm,v 1.6 2003/03/12 06:31:52 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 $SERVICE_MODULE = 'Template::Service::Apache' unless defined $SERVICE_MODULE;
 
@@ -176,12 +176,10 @@ sub file_to_path {
   if(UNIVERSAL::isa($roots, "ARRAY")) {
       foreach my $r (@{$roots}) {
           my $f = $r ."/". $prefix ."/". $path;
-          warn "Looking at $f\n";
           return $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
       }
   } else {
       my $f = $roots ."/". $prefix . "/" . $path;
-      warn "Looking at $f\n";
       return $self ->{_lookup_cache} -> {$path} = $f if -f $f or -d _;
   }
 }

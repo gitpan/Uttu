@@ -6,6 +6,45 @@ DESCRIPTION
     This list should not be considered exhaustive. Major bug fixes and API
     changes should be here.
 
+VERSION 0.05
+  New Features
+
+    Uttu->query_dbh_database
+        This method will return the database being used, given the same
+        arguments as "query_dbh".
+
+    $u -> query_host_available
+    $u -> set_host_available
+    $u -> set_host_unavailable
+        These can be used to track available hosts. The database support in
+        Uttu can use this to avoid connection attempts to machines known to
+        be unavailable.
+
+    $u -> resource
+        This method will return the ResourcePool object for a given
+        resource. The resource pools are configured via the
+        "global_resources" configuration file option.
+
+        Resources can be shared across sites.
+
+        Eventually, Uttu may use this to manage DBI connections (in which
+        case the above host-availability functions will be deprecated).
+
+    Error Messages
+        Added more thorough error reporting when there is a server error.
+
+  Bug Fixes
+
+    memory leak
+        Requesting the cache object created a new cache object each time. We
+        now cache the cache objects across requests.
+
+    AxKit invocation
+        Previous versions of Uttu used code copied from AxKit. We now call
+        the AxKit handler directly and use the proper API for managing the
+        AxKit configuration. Uttu should be able to withstand AxKit upgrades
+        more easily.
+
 VERSION 0.04
   New Features
 

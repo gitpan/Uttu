@@ -38,6 +38,7 @@ plan tests => 1, have 'LWP';
 #
 if($have_csv) {
     my $res = GET "/mason/test1.html";
+#    warn "Content: [", $res->content, "]\n";
     ok $res->content eq '[This is a Mason Page]
 ';
 } else {

@@ -15,6 +15,7 @@ handle .xml
 content_handler axkit
 
 [axkit]
-map_style text/xsl = Apache::AxKit::Language::Sablot
+#map_style text/xsl = Apache::AxKit::Language::Sablot
+map_style text/xsl = Apache::AxKit::Language::LibXSLT
 
 document_root pages/axkit

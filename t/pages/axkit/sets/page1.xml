@@ -1,3 +1,3 @@
 <?xml version="1.0"?>
-<?xml-stylesheet href="page1.xsl" type="text/xsl"?>
+<?xml-stylesheet href="/axkit/page1.xsl" type="text/xsl"?>
 <doit/>

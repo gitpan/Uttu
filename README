@@ -1,5 +1,5 @@
                             ---------
-                            Uttu 0.04
+                            Uttu 0.05
                             ---------
 
 Uttu is a web interface driver that works with a framework and 
@@ -22,7 +22,9 @@ resulting directory.  There, run the following:
 If the Apache::Test framework is installed, the tests will be run 
 against an Apache server.  Otherwise, any tests requiring a working 
 Apache server will be skipped.  Any tests requiring uri mappings will 
-be skipped if DBD::CSV is not installed.
+be skipped if DBD::CSV is not installed.  Tests for the ResourcePool-
+based resource management will only be run if the ResourcePool 
+modules are installed.
 
 The UTTU_PREFIX optional parameter for Makefile.PL configures the default
 installation prefix for frameworks and function sets.  Uttu provides an
@@ -42,9 +44,9 @@ The author lurks on both the mod_perl list as well as various IRC channels.
 Feel free to send questions there.
 
 
-Copyright (C) 2002  Texas A&M University.  All Rights Reserved.
+Copyright (C) 2002-2003  Texas A&M University.  All Rights Reserved.
 
 This program is free software; you can redistribute it and/or modify it
 under the same terms as Perl itself.
 
-$Id: README,v 1.4 2002/08/06 19:22:21 jgsmith Exp $
+$Id: README,v 1.5 2003/03/12 06:33:48 jgsmith Exp $

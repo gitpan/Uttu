@@ -16,7 +16,7 @@ use warnings;
 
 use vars qw{ $REVISION };
 
-$REVISION = sprintf("%d.%d", q$Id: axkit.pm,v 1.4 2002/08/06 19:47:35 jgsmith Exp $ =~ m{(\d+).(\d+)});
+$REVISION = sprintf("%d.%d", q$Id: axkit.pm,v 1.7 2003/03/12 06:33:48 jgsmith Exp $ =~ m{(\d+).(\d+)});
 
 ###
 ### [axkit] config variables
@@ -185,55 +185,7 @@ sub file_to_path {
 sub handle_request {
     my($self, $u, $r) = @_;
 
-    # following copied (and subsequently modified) from AxKit::handler
-    #
-
-    local $SIG{__DIE__} = sub { AxKit::prep_exception(@_)->throw };
-
-    local $AxKit::Cfg;
-    local $AxKit::DebugLevel;
-    local $Error::Debug;
-
-    $AxKit::Cfg = $self -> axkitconfig;
-
-    $AxKit::Cfg -> {apache} = $r;
-
-    $AxKit::DebugLevel = $AxKit::Cfg->DebugLevel();
-
-    if ($AxKit::Cfg->DebugTime) {
-        require Time::HiRes;
-        $AxKit::T0 = [Time::HiRes::gettimeofday()] if $AxKit::Cfg->DebugTime;
-    }
-
-    $Error::Debug = 1 if (($AxKit::Cfg->DebugLevel() > 3) || $AxKit::Cfg->StackTrace);
-
-    AxKit::Debug(1, "handler called for " . $r->uri);
-
-    local $AxKit::FastHandler = 0;
-
-    my $plugin_ret = AxKit::run_plugins($r);
-    if ($plugin_ret != OK) {
-        AxKit::Debug(2, "Plugin returned non-OK value");
-        return $plugin_ret;
-    }
-
-    # depends on $AxKit::Cfg, so following is okay
-    if($self -> secondary_handler) {
-        $AxKit::Cfg->{cfg}{ContentProvider} = 'Uttu::Handler::axkit::ContentProvider';
-        $AxKit::Cfg->{cfg}{StyleProvider} ||= 'Apache::AxKit::Provider::File';
-    }
-    my $provider = Apache::AxKit::Provider->new_content_provider($r);
-
-    return AxKit::main_handler($r, $provider);
-    #
-    # end copy from AxKit::handler
-}
-
-sub fail {
-    my($self, $r, $status, $message) = @_;
-
-    $r -> log_reason($message, $r -> filename);
-    return $status;
+    return AxKit::handler($r);
 }
 
 ###
@@ -256,13 +208,19 @@ sub config {
 
   my $s = $param -> server();
 
-  $self -> set_axkitconfig(Uttu::Handlers::axkit::ConfigReader->new($s));
+  require Uttu::Handler::axkit::ConfigReader;
+  $self -> set_axkitconfig(Uttu::Handler::axkit::ConfigReader -> new($s));
+
+  $s -> dir_config(AxConfigReader => 'Uttu::Handler::axkit::ConfigReader');
 
   my $hostname = ($c -> global_hostname || [$s -> server_hostname]) -> [0];
 
   if($c -> get('axkit_secondary_handler')) {
       my $shclass = "Uttu::Handler::" . $c -> get('axkit_secondary_handler');
+      #warn "secondary handler class: $shclass\n";
       $self -> set_secondary_handler($shclass -> config($c, $param));
+      $s -> dir_config(AxContentProvider => 'Uttu::Handler::axkit::ContentProvider');
+      $s -> dir_config(AxStyleProvider => 'Apache::AxKit::Provider::File');
   }
 
   return $self;
@@ -444,7 +402,7 @@ documentation in the AxKit module.
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
+Copyright (C) 2002-2003 Texas A&M University.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.

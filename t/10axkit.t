@@ -37,10 +37,12 @@ plan tests => 1, have 'LWP';
 #
 if($have_csv) {
     my $res = GET "/axkit/test1.xml";
-    ok $res->content eq '
+#    warn "Content: [",$res->content,"]\n";
+    ok $res->content eq q[<?xml version="1.0"?>
+
 This is an AxKit Page!
   
-';
+];
 } else {
    skip 1, "No DBD::CSV";
 }

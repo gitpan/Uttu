@@ -296,6 +296,14 @@ affect Apache, but informs Uttu of which port it should expect the
 connection to appear to be on.  Use this if the port at request time is
 different than that set in the virtual host configuration directive.
 
+=item resources
+
+This allows resource configuration to be done via an XML file. See 
+L<Uttu::Resource> for more information on the XML schema.  This 
+requires L<XML::XPath|XML::XPath> and some of the 
+L<ResourcePool|ResourcePool> modules, which will not be loaded 
+unless this variable is set.
+
 =item translate_uri
 
 This is a list of file extensions that Uttu should not handle yet map the
@@ -400,6 +408,17 @@ The arguments are almost identical to the C<define> function in
 L<AppConfig|AppConfig>.  C<Uttu-E<gt>define> expects an even number of
 arguments (basically a hash).
 
+=item note
+
+This is a handy way to track information during a request.  The notes are
+cleared at the end of each request.
+
+Called with one argument retrieves the note.  Called with two arguments
+sets the note.
+
+ my $context = $u -> note('context');
+ $u -> note('context', new My::Context ( session => $u->note('session') ));
+
 =item query_cache
 
   $cache = $u -> query_cache($config_prefix);
@@ -471,16 +490,43 @@ another for writing, with round robin access to either as desired.
 
 =back
 
-=item note
+=item query_dbh_info
 
-This is a handy way to track information during a request.  The notes are
-cleared at the end of each request.
+This method takes the same arguments as C<query_dbh> and returns 
+a reference to a hash containing the paramters used to connect to
+the database.  The hash has the following keys.
 
-Called with one argument retrieves the note.  Called with two arguments
-sets the note.
+=over 4
 
- my $context = $u -> note('context');
- $u -> note('context', new My::Context ( session => $u->note('session') ));
+=item driver
+
+=item database
+
+=item host
+
+This is an array reference to one or more hostnames.  The first 
+hostname in the array is the current (or most recent) host being used.
+
+=item username
+
+=item password
+
+=item options
+
+This is a reference to a hash of DBI options.
+
+=back 4
+
+=item query_host_available
+
+Returns a true value if the availability of the host is being 
+tracked and the host is marked as available, or if the host is not 
+being tracked.  If the host is tracked and marked unavailable, 
+returns false.
+
+ if($u -> query_host_available('localhost')) {
+    # connect to localhost
+ }
 
 =item query_components
 
@@ -501,12 +547,48 @@ gives a relative ordering in which to call the components.  The significant
 values of $key are defined by the framework.
 
 The component C<$comp> should be relative to the C<$function_set_base>.
-For example, if C<$function_set_base> is set to C<modules> (the default),
-then C<$comp> should be C<uttu/init> instead of C</modules/uttu/init>.
+For example, if C<$function_set_base> is set to C<sets> (the default),
+then C<$comp> should be C<uttu/init> instead of C</sets/uttu/init>.
 
 Calling C<register_component> during server startup will register the
 component for all requests.  Otherwise, it will be removed from the list at
 the end of the current request.
+
+=item resource
+
+ $pool = Uttu -> resource($key);
+ $handle = $pool -> get();
+  
+ # do stuff
+  
+ $pool -> free($handle)
+ # or (if an error)
+ $pool -> fail($handle)
+
+This method will return the L<ResourcePool::LoadBalancer|ResourcePool::LoadBalancer> 
+object managing the specified resource.
+
+=item set_host_available
+
+Marks the host as available.  If the optional second argument is 
+given, it will set or unset the availability of the host.
+
+ $u -> set_host_available('localhost');
+
+or
+
+ $u -> set_host_available('localhost', 1);
+
+=item set_host_unavailable
+
+Marks the host as unavailable.  If the optional second argument 
+is given, it will set or unset the unavailability of the host.
+
+ $u -> set_host_unavailable('localhost');
+
+or
+
+ $u -> set_host_unavailable('localhost', 1);
 
 =item uri_to_comp
 
@@ -554,6 +636,10 @@ and following the suggested C<@ISA> chain,
 
 =head1 BUGS
 
+Please report bugs to either the request tracker for CPAN 
+(L<http://rt.cpan.org/|http://rt.cpan.org/>) or on the SourceForge project
+(http://sourceforge.net/projects/gestinanna/|http://sourceforge.net/projects/gestinanna/>).
+
 =head2 Handling Apache Restarts
 
 This isn't so much a bug as a situation with an ugly workaround.
@@ -562,11 +648,11 @@ Otherwise, certain Uttu:: modules would not be loaded into the symbol tables
 by Perl during an Apache restart.
 
 This appears to not be a problem on FreeBSD 4.6 using Perl 5.6.1 and 
-mod_perl 1.27.  So the munging of %INC has been removed.  If you 
+mod_perl 1.27, so the munging of %INC has been removed.  If you 
 experience problems, let me know (or better yet, send a patch that 
 fixes them).
 
-So, Uttu can handle an Apache restart, it just isn't always 
+So Uttu can handle an Apache restart but it just isn't always 
 graceful about doing so.
 
 This may be related to the next bug.
@@ -588,7 +674,19 @@ For some reason, if a website is left idle for a long time (on the
 order of days), the uri-to-filename mapping code will be unable to 
 read the database (it seems). This will result in pages not being 
 found on the server.  The fix for now is to stop and restart the 
-web server.
+web server.  This may be fixed already.  It has not shown up for a 
+while in sites run by the author.
+
+We may move to using ResourcePool to manage DBI connections, in 
+part to fix this.
+
+=head2 Apache must start in /
+
+Apache must be started while in the root (/) directory.  Otherwise, 
+Uttu may be unable to find certain modules or files.  This doesn't 
+show up when running the tests.  This may be fixed already.  This 
+notice will be removed in a future release when it has been more 
+thoroughly tested.
 
 =head1 SEE ALSO
 
@@ -610,9 +708,9 @@ James G. Smith <jsmith@cpan.org>
 
 =head1 COPYRIGHT
 
-Copyright (C) 2002 Texas A&M University.  All Rights Reserved.
+Copyright (C) 2002-2003 Texas A&M University.  All Rights Reserved.
 
 This module is free software; you can redistribute it and/or
 modify it under the same terms as Perl itself.
 
-$Id: Uttu.pod,v 1.9 2002/08/06 19:26:45 jgsmith Exp $
+$Id: Uttu.pod,v 1.13 2003/03/12 06:33:48 jgsmith Exp $
